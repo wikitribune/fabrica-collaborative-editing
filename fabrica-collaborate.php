@@ -24,6 +24,7 @@ class Plugin {
 
 		add_action('load-edit.php', array($this, 'disablePostLock'));
 		add_action('load-post.php', array($this, 'disablePostLock'));
+		add_action('edit_form_top', array($this, 'cacheNumberRevisions'));
 		add_filter('wp_insert_post_data', array($this, 'resolveEditConflicts'), 1, 2);
 		add_action('edit_form_after_title', array($this, 'showDiff'));
 		add_filter('gettext', array($this, 'alterText'), 10, 2);
@@ -49,30 +50,46 @@ class Plugin {
 		}
 	}
 
+	public function cacheNumberRevisions($post) {
+		if ($post && $revisions = wp_get_post_revisions($post->ID)) {
+			echo '<input type="hidden" name="_number_revisions" value="' . count($revisions) . '">';
+		}
+	}
+
 	public function resolveEditConflicts($data, $postarr) {
 
 		// if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) { return $data; }
 		if ($postarr['ID'] == 0) { return $data; }
 
-		// Retrieve the saved version of the post being edited
-		$savedPost = get_post($postarr['ID'], ARRAY_A);
+		// Define transient where we store the edit in case of a clash
+		$transient = 'conflict_' . $postarr['ID'] . '_' . get_current_user_id();
+
+		// Only proceed to check merge conflicts if there's actually been another edit since we opened the page
+		if ($revisions = wp_get_post_revisions($postarr['ID']) && array_key_exists('_number_revisions', $postarr)) {
+			if (count($revisions) == $postarr['_number_revisions']) {
+				delete_transient($transient);
+				return $data;
+			}
+		}
 
 		// Get the user ID of the last published version
 		$latestEditor = get_post_meta($postarr['ID'], '_latest_editor', true);
 
 		// If no latest editor, no one has made an edit yet, so save one now and leave
 		if (!$latestEditor) {
+			delete_transient($transient);
 			update_post_meta($postarr['ID'], '_latest_editor', get_current_user_id());
 			return $data;
 		}
 
 		// If published editor is current user, they're just editing their own content, so leave
 		if ($latestEditor == get_current_user_id()) {
+			delete_transient($transient);
 			return $data;
 		}
 
-		// Define transient where we store the edit in case of a clash
-		$transient = 'conflict_' . $postarr['ID'] . '_' . get_current_user_id();
+		// Retrieve the saved content of the post being edited, for the diff
+		$savedPost = get_post($postarr['ID'], ARRAY_A);
 
 		// Check if there's a merge conflict between the saved version and the current version (and the authors are different)
 		if (get_transient($transient)) {
@@ -142,7 +159,7 @@ class Plugin {
 		}
 		$r .= "<tbody>\n$diff\n</tbody>\n";
 		$r .= "</table>";
-		$r .= '<style>table.diff { margin: 2rem 0; background-color: #fff; padding: 1rem 2rem; } table.diff td, table.diff th { font-family: inherit; }</style>';
+		$r .= "<style>table.diff { margin: 2rem 0; background-color: #fff; padding: 1rem 2rem; } table.diff td, table.diff th { font-family: inherit; }</style>";
 		return $r;
 	}
 
