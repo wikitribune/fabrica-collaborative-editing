@@ -53,6 +53,7 @@ class Plugin {
 	public function cacheNumberRevisions($post) {
 		if ($post && $revisions = wp_get_post_revisions($post->ID)) {
 			echo '<input type="hidden" name="_number_revisions" value="' . count($revisions) . '">';
+			echo '<input type="hidden" name="_last_revision_author" value="' . current($revisions)->post_author . '">';
 		}
 	}
 
@@ -64,26 +65,19 @@ class Plugin {
 		// Define transient where we store the edit in case of a clash
 		$transient = 'conflict_' . $postarr['ID'] . '_' . get_current_user_id();
 
-		// Only proceed to check merge conflicts if there's actually been another edit since we opened the page
-		if ($revisions = wp_get_post_revisions($postarr['ID']) && array_key_exists('_number_revisions', $postarr)) {
-			if (count($revisions) == $postarr['_number_revisions']) {
-				delete_transient($transient);
-				return $data;
-			}
-		}
-
-		// Get the user ID of the last published version
-		$latestEditor = get_post_meta($postarr['ID'], '_latest_editor', true);
-
-		// If no latest editor, no one has made an edit yet, so save one now and leave
-		if (!$latestEditor) {
-			delete_transient($transient);
-			update_post_meta($postarr['ID'], '_latest_editor', get_current_user_id());
+		// Only proceed if there are revisions
+		$revisions = wp_get_post_revisions($postarr['ID']);
+		if (!$revisions) {
 			return $data;
 		}
 
-		// If published editor is current user, they're just editing their own content, so leave
-		if ($latestEditor == get_current_user_id()) {
+		// And if we have data about the previous revision saved in the page when opened
+		if (!array_key_exists('_number_revisions', $postarr) || !array_key_exists('_last_revision_author', $postarr)) {
+			return $data;
+		}
+
+		// Only check merge conflicts if there's been another edit by another user since we opened the page
+		if (count($revisions) == $postarr['_number_revisions'] && $postarr['_last_revision_author'] == get_current_user_id()) {
 			delete_transient($transient);
 			return $data;
 		}
@@ -91,23 +85,23 @@ class Plugin {
 		// Retrieve the saved content of the post being edited, for the diff
 		$savedPost = get_post($postarr['ID'], ARRAY_A);
 
-		// Check if there's a merge conflict between the saved version and the current version (and the authors are different)
-		if (get_transient($transient)) {
+		// If yet another edit hasn't been published since the merge conflict was resolved, let this one through
+		if (count($revisions) == $postarr['_number_revisions'] && get_transient($transient)) {
 
-			// This means the revision has already been saved once, so let it through the second time
 			// TODO: add more sanitization and checks here, as well as more sophisticated controls for merge resolution
-			update_post_meta($postarr['ID'], '_latest_editor', get_current_user_id());
 			delete_transient($transient);
 
+		// Otherwise do the diff
 		} else if (wp_text_diff($savedPost['post_content'], $data['post_content'])) {
 
 			// Save the conflicted data in a transient based on the current post ID and current author ID
 			set_transient($transient, stripslashes($data['post_content']), WEEK_IN_SECONDS);
 
-			// Revert to saved version
+			// Revert to previously saved version
 			$data['post_content'] = $savedPost['post_content'];
 		}
 
+		// Return it for saving
 		return $data;
 	}
 
@@ -126,9 +120,13 @@ class Plugin {
 	}
 
 	public function renderDiff($left, $right) {
-		$args = array('title' => 'Your edit clashes with a recent edit by another author: please resolve the conflict and re-publish', 'title_left' => 'Currently published version', 'title_right' => 'Your version');
+		$args = array(
+			'title' => 'Your edit clashes with a recent edit by another author: please resolve the conflict and re-publish',
+			'title_left' => 'Currently published version',
+			'title_right' => 'Your latest edit'
+		);
 
-		if (!class_exists( 'WP_Text_Diff_Renderer_Table', false)) {
+		if (!class_exists('WP_Text_Diff_Renderer_Table', false)) {
 			require(ABSPATH . WPINC . '/wp-diff.php');
 		}
 		$left = normalize_whitespace($left);
