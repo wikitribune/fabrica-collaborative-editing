@@ -13,8 +13,6 @@ License URI: http://www.gnu.org/licenses/gpl-2.0.txt
 
 namespace Fabrica\Collaborate;
 
-require_once 'pending-changes.php';
-
 if (!defined('WPINC')) { die(); }
 
 class Plugin {
