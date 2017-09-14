@@ -24,7 +24,7 @@ class Plugin {
 
 		add_action('load-edit.php', array($this, 'disablePostLock'));
 		add_action('load-post.php', array($this, 'disablePostLock'));
-		add_action('edit_form_top', array($this, 'cacheNumberRevisions'));
+		add_action('edit_form_top', array($this, 'cacheLastRevisionData'));
 		add_filter('wp_insert_post_data', array($this, 'resolveEditConflicts'), 1, 2);
 		add_action('edit_form_after_title', array($this, 'showDiff'));
 		add_filter('gettext', array($this, 'alterText'), 10, 2);
@@ -50,10 +50,10 @@ class Plugin {
 		}
 	}
 
-	public function cacheNumberRevisions($post) {
+	public function cacheLastRevisionData($post) {
 		if ($post && $revisions = wp_get_post_revisions($post->ID)) {
-			echo '<input type="hidden" name="_last_revision_id" value="' . current($revisions)->ID . '">';
-			echo '<input type="hidden" name="_last_revision_author" value="' . current($revisions)->post_author . '">';
+			echo '<input type="hidden" name="_fc_last_revision_id" value="' . current($revisions)->ID . '">';
+			echo '<input type="hidden" name="_fc_last_revision_author" value="' . current($revisions)->post_author . '">';
 		}
 	}
 
@@ -72,12 +72,12 @@ class Plugin {
 		}
 
 		// And if we have data about the previous revision saved in the page when opened
-		if (!array_key_exists('_last_revision_id', $postarr) || !array_key_exists('_last_revision_author', $postarr)) {
+		if (!array_key_exists('_fc_last_revision_id', $postarr) || !array_key_exists('_fc_last_revision_author', $postarr)) {
 			return $data;
 		}
 
 		// Only check merge conflicts if there's been another edit by another user since we opened the page
-		if (current($revisions)->ID == $postarr['_last_revision_id'] && $postarr['_last_revision_author'] == get_current_user_id()) {
+		if (current($revisions)->ID == $postarr['_fc_last_revision_id'] && $postarr['_fc_last_revision_author'] == get_current_user_id()) {
 			delete_transient($transient);
 			return $data;
 		}
@@ -86,7 +86,7 @@ class Plugin {
 		$savedPost = get_post($postarr['ID'], ARRAY_A);
 
 		// If we have a transient already saved (and there isn't yet another revision), we're assuming this is an approved merge conflict
-		if (get_transient($transient) && current($revisions)->ID == $postarr['_last_revision_id']) {
+		if (get_transient($transient) && current($revisions)->ID == $postarr['_fc_last_revision_id']) {
 
 			// TODO: add more sanitization and checks here, as well as more sophisticated controls for merge resolution
 			delete_transient($transient);
