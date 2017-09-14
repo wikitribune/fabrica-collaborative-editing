@@ -52,7 +52,7 @@ class Plugin {
 
 	public function cacheNumberRevisions($post) {
 		if ($post && $revisions = wp_get_post_revisions($post->ID)) {
-			echo '<input type="hidden" name="_number_revisions" value="' . count($revisions) . '">';
+			echo '<input type="hidden" name="_last_revision_id" value="' . current($revisions)->ID . '">';
 			echo '<input type="hidden" name="_last_revision_author" value="' . current($revisions)->post_author . '">';
 		}
 	}
@@ -72,12 +72,12 @@ class Plugin {
 		}
 
 		// And if we have data about the previous revision saved in the page when opened
-		if (!array_key_exists('_number_revisions', $postarr) || !array_key_exists('_last_revision_author', $postarr)) {
+		if (!array_key_exists('_last_revision_id', $postarr) || !array_key_exists('_last_revision_author', $postarr)) {
 			return $data;
 		}
 
 		// Only check merge conflicts if there's been another edit by another user since we opened the page
-		if (count($revisions) == $postarr['_number_revisions'] && $postarr['_last_revision_author'] == get_current_user_id()) {
+		if (current($revisions)->ID == $postarr['_last_revision_id'] && $postarr['_last_revision_author'] == get_current_user_id()) {
 			delete_transient($transient);
 			return $data;
 		}
@@ -85,8 +85,8 @@ class Plugin {
 		// Retrieve the saved content of the post being edited, for the diff
 		$savedPost = get_post($postarr['ID'], ARRAY_A);
 
-		// If yet another edit hasn't been published since the merge conflict was resolved, let this one through
-		if (count($revisions) == $postarr['_number_revisions'] && get_transient($transient)) {
+		// If we have a transient already saved (and there isn't yet another revision), we're assuming this is an approved merge conflict
+		if (get_transient($transient) && current($revisions)->ID == $postarr['_last_revision_id']) {
 
 			// TODO: add more sanitization and checks here, as well as more sophisticated controls for merge resolution
 			delete_transient($transient);
@@ -111,10 +111,10 @@ class Plugin {
 		if ($content = get_transient($transient)) {
 
 			// Show the diff
+			// TODO - UI for granular merge conflict resolution (per paragraph)
 			echo $this->renderDiff($post->post_content, $content);
 
 			// Show the user's edit in the body field
-			// TODO - replace with something more granular for the purposes of the conflict resolution?
 			$post->post_content = $content;
 		}
 	}
