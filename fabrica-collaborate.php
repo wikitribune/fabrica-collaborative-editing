@@ -72,8 +72,8 @@ class Plugin {
 		if (!$post) { return; }
 		$latestRevision = $this->getLatestPublishedRevision($post->ID);
 		if (!$latestRevision) { return; }
-		echo '<input type="hidden" name="_fc_last_revision_id" value="' . $latestRevision->ID . '">';
-		echo '<input type="hidden" name="_fc_last_revision_author" value="' . $latestRevision->post_author . '">';
+		echo '<input type="hidden" id="fc_last_revision_id" name="_fc_last_revision_id" value="' . $latestRevision->ID . '">';
+		echo '<input type="hidden" id="fc_last_revision_author" name="_fc_last_revision_author" value="' . $latestRevision->post_author . '">';
 	}
 
 	// Check for intermediate edits and show a diff for resolution
@@ -201,9 +201,9 @@ class Plugin {
 	public function filterHeartbeatResponse($response, $data, $screenID) {
 
 		// Only modify repsonse on screens where we have a custom Heartbeat (single post)
-		/* if (!isset($data['fabrica-collaborate'])) {
+		if (!isset($data['fabrica-collaborate'])) {
 			return $response;
-		} */
+		}
 
 		// Override and thereby disable edit lock by eliminating the data sent
 		unset($response['wp-refresh-post-lock']);
@@ -211,8 +211,8 @@ class Plugin {
 		// Add custom data
 		// $response['data'] = $data;
 
-		// [TODO] Send the post_id ourselves, rathert than relying on post lock?
-		$response['fc_last_revision_id'] = $this->getLatestPublishedRevision($data['wp-refresh-post-lock']['post_id'])->ID;
+		// Send the latest revision of current post which will be compared to the cached one to see if it's changed while editing
+		$response['fc_last_revision_id'] = $this->getLatestPublishedRevision($data['fabrica-collaborate']['post_id'])->ID;
 		return $response;
 	}
 
@@ -222,15 +222,16 @@ class Plugin {
 
 			// Send data to Heartbeat if needed (we might not need it)
 			// Gets removed from the queue after once
-			// wp.heartbeat.enqueue('fabrica-collaborate', { 'postID' : 4 }, true);
+			wp.heartbeat.enqueue('fabrica-collaborate', { 'post_id' : jQuery('#post_ID').val() }, true);
 
 			// Listen for response
 			jQuery(document).ready(function($) {
 				$(document).on('heartbeat-tick', function(e, data) {
+					wp.heartbeat.enqueue('fabrica-collaborate', { 'post_id' : jQuery('#post_ID').val() }, true);
 					console.log(data);
-					if (data.fc_last_revision_id != $('input[name=_fc_last_revision_id').val()) {
+					// if (data.fc_last_revision_id != $('#fc_last_revision_id').val()) {
 						// alert('A new revision has been published while you have been editing.');
-					}
+					// }
 				});
 			});
 			</script>
