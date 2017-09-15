@@ -37,7 +37,6 @@ class Plugin {
 		add_action('edit_form_top', array($this, 'cacheLastRevisionData'));
 		add_filter('wp_insert_post_data', array($this, 'resolveEditConflicts'), 1, 2);
 		add_action('edit_form_after_title', array($this, 'prepareDiff'));
-		add_filter('gettext', array($this, 'changeLabels'), 10, 2);
 	}
 
 	// Generates a transient ID from a post ID and user ID
@@ -200,19 +199,6 @@ class Plugin {
 		return $r;
 	}
 
-	// Change label of Update button to suit our workflow
-	public function changeLabels($translation, $text) {
-		if ($text == 'Update') {
-			global $post;
-			if (!$post) { return $translation; }
-			$transientID = $this->generateTransientID($post->ID, get_current_user_id());
-			if (get_transient($transientID)) {
-				return 'Resolve Edit Conflict';
-			}
-		}
-		return $translation;
-	}
-
 	// Filter information sent back to browser in Heartbeat
 	public function filterHeartbeatResponse($response, $data, $screenID) {
 
@@ -227,7 +213,10 @@ class Plugin {
 		// Send the latest revision of current post which will be compared to the cached one to see if it's changed while editing
 		$latestRevision = $this->getLatestPublishedRevision($data['fabrica-collaborate']['post_id']);
 		if ($latestRevision) {
-			$response['fabrica-collaborate']['fc_last_revision_id'] = $latestRevision->ID;
+			$response['fabrica-collaborate'] = array(
+				'fc_last_revision_id' => $latestRevision->ID,
+				'fc_last_revision_author' => $latestRevision->post_author
+			);
 		}
 
 		// Override and thereby disable edit lock by eliminating the data sent
