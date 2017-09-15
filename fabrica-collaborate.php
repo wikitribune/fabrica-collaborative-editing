@@ -109,20 +109,22 @@ class Plugin {
 		// Retrieve the saved content of the post being edited, for the diff
 		$savedPost = get_post($rawData['ID'], ARRAY_A);
 
-		// If no new revision has been published, treat this as a successful manual merge and save the changes
-		if ($latestRevision->ID == $rawData['_fc_last_revision_id']) {
+		// If a new revision has been published since we started editing...
+		if ($latestRevision->ID != $rawData['_fc_last_revision_id']) {
+
+			// ... check for an edit conflict
+			if (wp_text_diff($savedPost['post_content'], $data['post_content'])) {
+
+				// There is one, so save the conflicted data in a transient based on the post ID and user ID
+				set_transient($transientID, stripslashes($data['post_content']), WEEK_IN_SECONDS);
+
+				// Revert to previously saved version for now - WP will not create a new revision
+				$data['post_content'] = $savedPost['post_content'];
+			}
+		} else {
+
+			// This is either a normal save or a successful manual merge, so delete any cached changes
 			delete_transient($transientID);
-			return $data;
-		}
-
-		// If we're still here, there's been a new revision since we started editing, so check for a conflict
-		if (wp_text_diff($savedPost['post_content'], $data['post_content'])) {
-
-			// There is, save the conflicted data in a transient based on the current post ID and current author ID
-			set_transient($transientID, stripslashes($data['post_content']), WEEK_IN_SECONDS);
-
-			// Revert to previously saved version
-			$data['post_content'] = $savedPost['post_content'];
 		}
 
 		// Return data for saving
