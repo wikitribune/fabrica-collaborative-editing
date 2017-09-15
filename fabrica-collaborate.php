@@ -88,20 +88,18 @@ class Plugin {
 	// Check for intermediate edits and show a diff for resolution
 	public function resolveEditConflicts($data, $rawData) {
 
-		// Don't interfere with autosaves
+		// Don't interfere with autosaves - shouldn't happen anyway since this hook is excluded from AJAX requests, but just in case
 		if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) { return $data; }
 
 		// Occasionally seems to get called with an ID of 0, escape early
 		if ($rawData['ID'] == 0) { return $data; }
 
 		// Only proceed if we've received the cached data about the previous revision (this will exclude unsupported post types)
-		if (!array_key_exists('_fc_last_revision_id', $rawData)) {
-			return $data;
-		}
+		if (!array_key_exists('_fc_last_revision_id', $rawData)) { return $data; }
 
 		// ... and if the current post actually has revisions
 		$latestRevision = $this->getLatestPublishedRevision($rawData['ID']);
-		if (!$latestRevision) { return; }
+		if (!$latestRevision) { return $data; }
 
 		// Define name of transient where we store the edit in case of a clash
 		$transientID = $this->generateTransientID($rawData['ID'], get_current_user_id());
