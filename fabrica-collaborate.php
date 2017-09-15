@@ -24,16 +24,26 @@ class Plugin {
 		// Exit now for non-admin requests
 		if (!is_admin()) { return; }
 
+		// Heartbeat response is called via AJAX, so wouldn't get loaded via `load-post.php` hooks
+		// Also, high priority because needs to be applied late to override/cancel edit lock data
+		add_filter('heartbeat_received', array($this, 'filterHeartbeatResponse'), 999999, 3);
+
+		// Exit now if AJAX request, to hook admin-only requests after
+		if (wp_doing_ajax()) { return; }
+
+		// Main hooks
 		add_action('load-edit.php', array($this, 'disableEditLock'));
 		add_action('load-post.php', array($this, 'disablePostLock'));
 		add_action('edit_form_top', array($this, 'cacheLastRevisionData'));
 		add_filter('wp_insert_post_data', array($this, 'resolveEditConflicts'), 1, 2);
 		add_action('edit_form_after_title', array($this, 'prepareDiff'));
 		add_filter('gettext', array($this, 'changeLabels'), 10, 2);
-		add_filter('heartbeat_received', array($this, 'filterHeartbeatResponse'), 999999, 3); // Needs to go later to override edit lock
+	}
 
-		// Exit now if AJAX request, to register pure admin-only requests after
-		if (wp_doing_ajax()) { return; }
+	// Generates a transient ID from a post ID and user ID
+	public function generateTransientID($postID, $userID) {
+		if (!$postID || !$userID) { return false; }
+		return 'fc_edit_conflict_' . $postID . '_' . $userID;
 	}
 
 	// Returns the latest published revision, excluding autosaves
@@ -46,7 +56,7 @@ class Plugin {
 		return current($revisions);
 	}
 
-	// Adds temporary where clause to exclude autosaves
+	// Adds the temporary WHERE clause needed to exclude autosave from the revisions list
 	public function filterOutAutosaves($where) {
 		global $wpdb;
 		$where .= " AND " . $wpdb->prefix . "posts.post_name NOT LIKE '%-autosave-v1'";
@@ -69,7 +79,8 @@ class Plugin {
 
 	// Add last revision info as form data on post edit
 	public function cacheLastRevisionData($post) {
-		if (!$post) { return; }
+		if (!$post) { return; } // Exit if some problem with the post
+		if (!in_array($post->post_type, self::$postTypesSupported)) { return; } // Exit for unsupported post types
 		$latestRevision = $this->getLatestPublishedRevision($post->ID);
 		if (!$latestRevision) { return; }
 		echo '<input type="hidden" id="fc_last_revision_id" name="_fc_last_revision_id" value="' . $latestRevision->ID . '">';
@@ -78,24 +89,28 @@ class Plugin {
 
 	// Check for intermediate edits and show a diff for resolution
 	public function resolveEditConflicts($data, $rawData) {
+
+		// Don't interfere with autosaves
 		if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) { return $data; }
+
+		// Occasionally seems to get called with an ID of 0, escape early
 		if ($rawData['ID'] == 0) { return $data; }
 
-		// Only proceed if there are revisions
-		$latestRevision = $this->getLatestPublishedRevision($rawData['ID']);
-		if (!$latestRevision) { return; }
-
-		// And if we have data about the previous revision saved in the page when opened
+		// Only proceed if we've received the cached data about the previous revision (this will exclude unsupported post types)
 		if (!array_key_exists('_fc_last_revision_id', $rawData) || !array_key_exists('_fc_last_revision_author', $rawData)) {
 			return $data;
 		}
 
+		// ... and if the current post actually has revisions
+		$latestRevision = $this->getLatestPublishedRevision($rawData['ID']);
+		if (!$latestRevision) { return; }
+
 		// Define name of transient where we store the edit in case of a clash
-		$transient = 'conflict_' . $rawData['ID'] . '_' . get_current_user_id();
+		$transientID = $this->generateTransientID($rawData['ID'], get_current_user_id());
 
 		// Only check merge conflicts if there's been another edit by another user since we opened the page
 		if ($latestRevision->ID == $rawData['_fc_last_revision_id'] && $rawData['_fc_last_revision_author'] == get_current_user_id()) {
-			delete_transient($transient);
+			delete_transient($transientID);
 			return $data;
 		}
 
@@ -103,16 +118,16 @@ class Plugin {
 		$savedPost = get_post($rawData['ID'], ARRAY_A);
 
 		// If we have a transient already saved (and there isn't yet another revision), we're assuming this is an approved merge conflict
-		if (get_transient($transient) && $latestRevision->ID == $rawData['_fc_last_revision_id']) {
+		if (get_transient($transientID) && $latestRevision->ID == $rawData['_fc_last_revision_id']) {
 
 			// TODO: add more sanitization and checks here, as well as more sophisticated controls for merge resolution
-			delete_transient($transient);
+			delete_transient($transientID);
 
 		// Otherwise do the diff
 		} else if (wp_text_diff($savedPost['post_content'], $data['post_content'])) {
 
 			// Save the conflicted data in a transient based on the current post ID and current author ID
-			set_transient($transient, stripslashes($data['post_content']), WEEK_IN_SECONDS);
+			set_transient($transientID, stripslashes($data['post_content']), WEEK_IN_SECONDS);
 
 			// Revert to previously saved version
 			$data['post_content'] = $savedPost['post_content'];
@@ -125,18 +140,18 @@ class Plugin {
 	// Show diff if relevant
 	public function prepareDiff() {
 		global $post;
-		$transient = 'conflict_' . $post->ID . '_' . get_current_user_id();
-		$content = get_transient($transient);
+		$transientID = $this->generateTransientID($post->ID, get_current_user_id());
+		$savedContent = get_transient($transientID);
 
 		// Leave if no transient (cached changes) set
-		if ($content === false) { return; }
+		if ($savedContent === false) { return; }
 
 		// Render diff
 		// [TODO] UI for granular merge conflict resolution (per paragraph)
-		echo $this->renderDiff($post->post_content, $content);
+		echo $this->renderDiff($post->post_content, $savedContent);
 
 		// Show the user's edit in the body field
-		$post->post_content = $content;
+		$post->post_content = $savedContent;
 	}
 
 	// Render the diff
@@ -186,11 +201,9 @@ class Plugin {
 	public function changeLabels($translation, $text) {
 		if ($text == 'Update') {
 			global $post;
-			if (!$post) {
-				return $translation;
-			}
-			$transient = 'conflict_' . $post->ID . '_' . get_current_user_id();
-			if (get_transient($transient)) {
+			if (!$post) { return $translation; }
+			$transientID = $this->generateTransientID($post->ID, get_current_user_id());
+			if (get_transient($transientID)) {
 				return 'Resolve Edit Conflict';
 			}
 		}
@@ -205,28 +218,32 @@ class Plugin {
 			return $response;
 		}
 
-		// Override and thereby disable edit lock by eliminating the data sent
-		unset($response['wp-refresh-post-lock']);
-
 		// Add custom data
 		// $response['data'] = $data;
 
 		// Send the latest revision of current post which will be compared to the cached one to see if it's changed while editing
-		$response['fc_last_revision_id'] = $this->getLatestPublishedRevision($data['fabrica-collaborate']['post_id'])->ID;
+		$latestRevision = $this->getLatestPublishedRevision($data['fabrica-collaborate']['post_id']);
+		if ($latestRevision) {
+			$response['fc_last_revision_id'] = $latestRevision->ID;
+		}
+
+		// Override and thereby disable edit lock by eliminating the data sent
+		unset($response['wp-refresh-post-lock']);
+
+		// Send back to the browser
 		return $response;
 	}
 
 	// Process information received from server in Heartbeat
 	public function handleHeartbeatResponse() {
 		?><script>
-
-			// Send data to Heartbeat if needed (we might not need it)
-			// Gets removed from the queue after once
-			wp.heartbeat.enqueue('fabrica-collaborate', { 'post_id' : jQuery('#post_ID').val() }, true);
-
-			// Listen for response
 			jQuery(document).ready(function($) {
-				$(document).on('heartbeat-tick', function(e, data) {
+
+				// Send post ID with first tick
+				wp.heartbeat.enqueue('fabrica-collaborate', { 'post_id' : jQuery('#post_ID').val() }, true);
+
+				// Re-send the post ID with subsequent ticks
+				$(document).on('heartbeat-tick.fabrica-collaborate', function(e, data) {
 					wp.heartbeat.enqueue('fabrica-collaborate', { 'post_id' : jQuery('#post_ID').val() }, true);
 					console.log(data);
 					// if (data.fc_last_revision_id != $('#fc_last_revision_id').val()) {
