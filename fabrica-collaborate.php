@@ -216,7 +216,7 @@ class Plugin {
 		// $response['data'] = $data;
 
 		// [TODO] Send the post_id ourselves, rathert than relying on post lock?
-		$response['fc_latest_revision'] = $this->getLatestPublishedRevision($data['wp-refresh-post-lock']['post_id'])->ID;
+		$response['fc_last_revision_id'] = $this->getLatestPublishedRevision($data['wp-refresh-post-lock']['post_id'])->ID;
 		return $response;
 	}
 
@@ -232,6 +232,9 @@ class Plugin {
 			jQuery(document).ready(function($) {
 				$(document).on('heartbeat-tick', function(e, data) {
 					console.log(data);
+					if (data.fc_last_revision_id != $('input[name=_fc_last_revision_id').val()) {
+						// alert('A new revision has been published while you have been editing.');
+					}
 				});
 			});
 			</script>
