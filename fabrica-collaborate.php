@@ -109,7 +109,7 @@ class Plugin {
 		$transientID = $this->generateTransientID($rawData['ID'], get_current_user_id());
 
 		// Only check merge conflicts if there's been another edit by another user since we opened the page
-		if ($latestRevision->ID == $rawData['_fc_last_revision_id'] && $rawData['_fc_last_revision_author'] == get_current_user_id()) {
+		if ($latestRevision->ID == $rawData['_fc_last_revision_id'] && $latestRevision->post_author == $rawData['_fc_last_revision_author']) {
 			delete_transient($transientID);
 			return $data;
 		}
@@ -162,6 +162,7 @@ class Plugin {
 			'title_right' => 'Your suggested edit'
 		);
 
+		// [TODO] tidy this up a lot
 		if (!class_exists('WP_Text_Diff_Renderer_Table', false)) {
 			require(ABSPATH . WPINC . '/wp-diff.php');
 		}
@@ -171,16 +172,18 @@ class Plugin {
 		$left = explode("\n", $left);
 		$right = explode("\n", $right);
 		$diff = new \Text_Diff($left, $right);
+
+		// [TODO] Traverse $diff directly and remove need for WP_Text_Diff_Renderer_Table
 		$renderer = new \WP_Text_Diff_Renderer_Table($args);
 		$diff = $renderer->render($diff);
 
 		$r = "<table class='diff'>\n";
-		$r .= "<col class='content diffsplit left' /><col class='content diffsplit middle' /><col class='content diffsplit right' />";
+		$r .= "<col class='content diffsplit left'><col class='content diffsplit middle'><col class='content diffsplit right'>";
 		if ($args['title'] || $args['title_left'] || $args['title_right']) {
 			$r .= "<thead>";
 		}
 		if ($args['title']) {
-			$r .= "<tr class='diff-title'><th colspan='4'>$args[title]</th></tr>\n";
+			$r .= "<tr class='diff-title'><th colspan='3'>$args[title]</th></tr>\n";
 		}
 		if ($args['title_left'] || $args['title_right'] ) {
 			$r .= "<tr class='diff-sub-title'>\n";
