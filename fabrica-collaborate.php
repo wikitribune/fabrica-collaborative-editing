@@ -213,7 +213,7 @@ class Plugin {
 	// Filter information sent back to browser in Heartbeat
 	public function filterHeartbeatResponse($response, $data, $screenID) {
 
-		// Only modify repsonse on screens where we have a custom Heartbeat (single post)
+		// Only modify response when we've been passed our own data
 		if (!isset($data['fabrica-collaborate'])) {
 			return $response;
 		}
@@ -224,7 +224,7 @@ class Plugin {
 		// Send the latest revision of current post which will be compared to the cached one to see if it's changed while editing
 		$latestRevision = $this->getLatestPublishedRevision($data['fabrica-collaborate']['post_id']);
 		if ($latestRevision) {
-			$response['fc_last_revision_id'] = $latestRevision->ID;
+			$response['fabrica-collaborate']['fc_last_revision_id'] = $latestRevision->ID;
 		}
 
 		// Override and thereby disable edit lock by eliminating the data sent
