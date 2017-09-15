@@ -32,8 +32,8 @@ class Plugin {
 		if (wp_doing_ajax()) { return; }
 
 		// Main hooks
-		add_action('load-edit.php', array($this, 'disableEditLock'));
-		add_action('load-post.php', array($this, 'disablePostLock'));
+		add_action('load-edit.php', array($this, 'disablePostListLock'));
+		add_action('load-post.php', array($this, 'disablePostEditLock'));
 		add_action('edit_form_top', array($this, 'cacheLastRevisionData'));
 		add_filter('wp_insert_post_data', array($this, 'resolveEditConflicts'), 1, 2);
 		add_action('edit_form_after_title', array($this, 'prepareDiff'));
@@ -64,14 +64,14 @@ class Plugin {
 	}
 
 	// Completely disable Heartbeat on list page (to avoid 'X is editing' notifications)
-	public function disableEditLock() {
+	public function disablePostListLock() {
 		if (!in_array(get_current_screen()->post_type, self::$postTypesSupported)) { return; } // Exit for unsupported post types
 		wp_deregister_script('heartbeat');
 		add_filter('wp_check_post_lock_window', '__return_false');
 	}
 
 	// Leave Heartbeat active on post edit (so we can push edits for instant resolution) but override single-user lock
-	public function disablePostLock() {
+	public function disablePostEditLock() {
 		if (!in_array(get_current_screen()->post_type, self::$postTypesSupported)) { return; } // Exit for unsupported post types
 		add_filter('show_post_locked_dialog', '__return_false');
 		add_action('admin_print_footer_scripts', array($this, 'handleHeartbeatResponse'), 20);
