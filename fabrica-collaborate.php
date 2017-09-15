@@ -55,20 +55,16 @@ class Plugin {
 
 	// Completely disable Heartbeat on list page (to avoid 'X is editing' notifications)
 	public function disableEditLock() {
-		$currentScreen = get_current_screen();
-		if (in_array($currentScreen->post_type, self::$postTypesSupported)) {
-			wp_deregister_script('heartbeat');
-			add_filter('wp_check_post_lock_window', '__return_false');
-		}
+		if (!in_array(get_current_screen()->post_type, self::$postTypesSupported)) { return; } // Exit for unsupported post types
+		wp_deregister_script('heartbeat');
+		add_filter('wp_check_post_lock_window', '__return_false');
 	}
 
 	// Leave Heartbeat active on post edit (so we can push edits for instant resolution) but override single-user lock
 	public function disablePostLock() {
-		$currentScreen = get_current_screen();
-		if (in_array($currentScreen->post_type, self::$postTypesSupported)) {
-			add_filter('show_post_locked_dialog', '__return_false');
-			add_action('admin_print_footer_scripts', array($this, 'handleHeartbeat'), 20);
-		}
+		if (!in_array(get_current_screen()->post_type, self::$postTypesSupported)) { return; } // Exit for unsupported post types
+		add_filter('show_post_locked_dialog', '__return_false');
+		add_action('admin_print_footer_scripts', array($this, 'handleHeartbeatResponse'), 20);
 	}
 
 	// Add last revision info as form data on post edit
@@ -221,7 +217,7 @@ class Plugin {
 	}
 
 	// Process information received from server in Heartbeat
-	public function handleHeartbeat() {
+	public function handleHeartbeatResponse() {
 		?><script>
 
 			// Send data to Heartbeat if needed (we might not need it)
