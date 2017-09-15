@@ -17,76 +17,97 @@ if (!defined('WPINC')) { die(); }
 
 class Plugin {
 
+	public static $postTypesSupported = array('page', 'post');
+
 	public function __construct() {
 
 		// Exit now for non-admin requests
 		if (!is_admin()) { return; }
 
-		add_action('load-edit.php', array($this, 'disablePostLock'));
+		add_action('load-edit.php', array($this, 'disableEditLock'));
 		add_action('load-post.php', array($this, 'disablePostLock'));
 		add_action('edit_form_top', array($this, 'cacheLastRevisionData'));
 		add_filter('wp_insert_post_data', array($this, 'resolveEditConflicts'), 1, 2);
-		add_action('edit_form_after_title', array($this, 'showDiff'));
-		add_filter('gettext', array($this, 'alterText'), 10, 2);
+		add_action('edit_form_after_title', array($this, 'prepareDiff'));
+		add_filter('gettext', array($this, 'changeLabels'), 10, 2);
+		add_filter('heartbeat_received', array($this, 'filterHeartbeatResponse'), 999999, 3); // Needs to go later to override edit lock
 
 		// Exit now if AJAX request, to register pure admin-only requests after
 		if (wp_doing_ajax()) { return; }
 	}
 
-	public function disablePostLock() {
-		$currentPostType = get_current_screen()->post_type;
+	// Returns the latest published revision, excluding autosaves
+	public function getLatestPublishedRevision($postID) {
+		$args = array('posts_per_page', 1, 'suppress_filters' => false);
+		add_filter('posts_where', array($this, 'filterOutAutosaves'), 10, 1);
+		$revisions = wp_get_post_revisions($postID, $args);
+		remove_filter('posts_where', array($this, 'filterOutAutosaves'));
+		if (count($revisions) == 0) { return false; }
+		return current($revisions);
+	}
 
-		// Disable locking for page, post and some custom post type
-		$collaborativePostTypes = array(
-			'page',
-			'post',
-			'custom_post_type'
-		);
+	// Adds temporary where clause to exclude autosaves
+	public function filterOutAutosaves($where) {
+		global $wpdb;
+		$where .= " AND " . $wpdb->prefix . "posts.post_name NOT LIKE '%-autosave-v1'";
+		return $where;
+	}
 
-		if (in_array($currentPostType, $collaborativePostTypes)) {
-			add_filter('show_post_locked_dialog', '__return_false');
-			add_filter('wp_check_post_lock_window', '__return_false');
+	// Completely disable Heartbeat on list page (to avoid 'X is editing' notifications)
+	public function disableEditLock() {
+		$currentScreen = get_current_screen();
+		if (in_array($currentScreen->post_type, self::$postTypesSupported)) {
 			wp_deregister_script('heartbeat');
+			add_filter('wp_check_post_lock_window', '__return_false');
 		}
 	}
 
+	// Leave Heartbeat active on post edit (so we can push edits for instant resolution) but override single-user lock
+	public function disablePostLock() {
+		$currentScreen = get_current_screen();
+		if (in_array($currentScreen->post_type, self::$postTypesSupported)) {
+			add_filter('show_post_locked_dialog', '__return_false');
+			add_action('admin_print_footer_scripts', array($this, 'handleHeartbeat'), 20);
+		}
+	}
+
+	// Add last revision info as form data on post edit
 	public function cacheLastRevisionData($post) {
-		if ($post && $revisions = wp_get_post_revisions($post->ID)) {
-			echo '<input type="hidden" name="_fc_last_revision_id" value="' . current($revisions)->ID . '">';
-			echo '<input type="hidden" name="_fc_last_revision_author" value="' . current($revisions)->post_author . '">';
-		}
+		if (!$post) { return; }
+		$latestRevision = $this->getLatestPublishedRevision($post->ID);
+		if (!$latestRevision) { return; }
+		echo '<input type="hidden" name="_fc_last_revision_id" value="' . $latestRevision->ID . '">';
+		echo '<input type="hidden" name="_fc_last_revision_author" value="' . $latestRevision->post_author . '">';
 	}
 
-	public function resolveEditConflicts($data, $postarr) {
-
-		// if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) { return $data; }
-		if ($postarr['ID'] == 0) { return $data; }
-
-		// Define transient where we store the edit in case of a clash
-		$transient = 'conflict_' . $postarr['ID'] . '_' . get_current_user_id();
+	// Check for intermediate edits and show a diff for resolution
+	public function resolveEditConflicts($data, $rawData) {
+		if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) { return $data; }
+		if ($rawData['ID'] == 0) { return $data; }
 
 		// Only proceed if there are revisions
-		$revisions = wp_get_post_revisions($postarr['ID']);
-		if (!$revisions) {
-			return $data;
-		}
+		$latestRevision = $this->getLatestPublishedRevision($rawData['ID']);
+		if (!$latestRevision) { return; }
 
 		// And if we have data about the previous revision saved in the page when opened
-		if (!array_key_exists('_fc_last_revision_id', $postarr) || !array_key_exists('_fc_last_revision_author', $postarr)) {
+		if (!array_key_exists('_fc_last_revision_id', $rawData) || !array_key_exists('_fc_last_revision_author', $rawData)) {
 			return $data;
 		}
 
+		// Define name of transient where we store the edit in case of a clash
+		$transient = 'conflict_' . $rawData['ID'] . '_' . get_current_user_id();
+
 		// Only check merge conflicts if there's been another edit by another user since we opened the page
-		if (current($revisions)->ID == $postarr['_fc_last_revision_id'] && $postarr['_fc_last_revision_author'] == get_current_user_id()) {
+		if ($latestRevision->ID == $rawData['_fc_last_revision_id'] && $rawData['_fc_last_revision_author'] == get_current_user_id()) {
 			delete_transient($transient);
 			return $data;
 		}
 
 		// Retrieve the saved content of the post being edited, for the diff
-		$savedPost = get_post($postarr['ID'], ARRAY_A);
+		$savedPost = get_post($rawData['ID'], ARRAY_A);
 
 		// If we have a transient already saved (and there isn't yet another revision), we're assuming this is an approved merge conflict
-		if (get_transient($transient) && current($revisions)->ID == $postarr['_fc_last_revision_id']) {
+		if (get_transient($transient) && $latestRevision->ID == $rawData['_fc_last_revision_id']) {
 
 			// TODO: add more sanitization and checks here, as well as more sophisticated controls for merge resolution
 			delete_transient($transient);
@@ -105,25 +126,29 @@ class Plugin {
 		return $data;
 	}
 
-	public function showDiff() {
+	// Show diff if relevant
+	public function prepareDiff() {
 		global $post;
 		$transient = 'conflict_' . $post->ID . '_' . get_current_user_id();
-		if ($content = get_transient($transient)) {
+		$content = get_transient($transient);
 
-			// Show the diff
-			// TODO - UI for granular merge conflict resolution (per paragraph)
-			echo $this->renderDiff($post->post_content, $content);
+		// Leave if no transient (cached changes) set
+		if ($content === false) { return; }
 
-			// Show the user's edit in the body field
-			$post->post_content = $content;
-		}
+		// Render diff
+		// [TODO] UI for granular merge conflict resolution (per paragraph)
+		echo $this->renderDiff($post->post_content, $content);
+
+		// Show the user's edit in the body field
+		$post->post_content = $content;
 	}
 
+	// Render the diff
 	public function renderDiff($left, $right) {
 		$args = array(
-			'title' => 'Your edit clashes with a recent edit by another author: please resolve the conflict and re-publish',
-			'title_left' => 'Currently published version',
-			'title_right' => 'Your latest edit'
+			'title' => 'Your suggested edit clashes with a recent edit by another author: please resolve the conflict and re-publish',
+			'title_left' => 'Latest published version',
+			'title_right' => 'Your suggested edit'
 		);
 
 		if (!class_exists('WP_Text_Diff_Renderer_Table', false)) {
@@ -157,11 +182,12 @@ class Plugin {
 		}
 		$r .= "<tbody>\n$diff\n</tbody>\n";
 		$r .= "</table>";
-		$r .= "<style>table.diff { margin: 2rem 0; background-color: #fff; padding: 1rem 2rem; } table.diff td, table.diff th { font-family: inherit; }</style>";
+		$r .= "<style>table.diff { margin: 2rem 0; } table.diff th { font-family: inherit; } table.diff td { font-family: Georgia; font-size: 1rem; } table.diff .diff-title th { font-size: 16px; }</style>";
 		return $r;
 	}
 
-	public function alterText($translation, $text) {
+	// Change label of Update button to suit our workflow
+	public function changeLabels($translation, $text) {
 		if ($text == 'Update') {
 			global $post;
 			if (!$post) {
@@ -169,11 +195,47 @@ class Plugin {
 			}
 			$transient = 'conflict_' . $post->ID . '_' . get_current_user_id();
 			if (get_transient($transient)) {
-				return 'Resolve Merge Conflict';
+				return 'Resolve Edit Conflict';
 			}
 		}
 		return $translation;
 	}
-}
 
+	// Filter information sent back to browser in Heartbeat
+	public function filterHeartbeatResponse($response, $data, $screenID) {
+
+		// Only modify repsonse on screens where we have a custom Heartbeat (single post)
+		/* if (!isset($data['fabrica-collaborate'])) {
+			return $response;
+		} */
+
+		// Override and thereby disable edit lock by eliminating the data sent
+		unset($response['wp-refresh-post-lock']);
+
+		// Add custom data
+		// $response['data'] = $data;
+
+		// [TODO] Send the post_id ourselves, rathert than relying on post lock?
+		$response['fc_latest_revision'] = $this->getLatestPublishedRevision($data['wp-refresh-post-lock']['post_id'])->ID;
+		return $response;
+	}
+
+	// Process information received from server in Heartbeat
+	public function handleHeartbeat() {
+		?><script>
+
+			// Send data to Heartbeat if needed (we might not need it)
+			// Gets removed from the queue after once
+			// wp.heartbeat.enqueue('fabrica-collaborate', { 'postID' : 4 }, true);
+
+			// Listen for response
+			jQuery(document).ready(function($) {
+				$(document).on('heartbeat-tick', function(e, data) {
+					console.log(data);
+				});
+			});
+			</script>
+		<?php
+	}
+}
 new Plugin();
