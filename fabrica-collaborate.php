@@ -195,7 +195,7 @@ class Plugin {
 	public function filterHeartbeatResponse($response, $data, $screenID) {
 
 		// Only modify response when we've been passed our own data
-		if (!isset($data['fabrica-collaborate'])) {
+		if (!isset($data['fc'])) {
 			return $response;
 		}
 
@@ -203,10 +203,11 @@ class Plugin {
 		// $response['data'] = $data;
 
 		// Send the latest revision of current post which will be compared to the cached one to see if it's changed while editing
-		$latestRevision = $this->getLatestPublishedRevision($data['fabrica-collaborate']['post_id']);
+		$latestRevision = $this->getLatestPublishedRevision($data['fc']['post_id']);
 		if ($latestRevision) {
-			$response['fabrica-collaborate'] = array(
-				'fc_last_revision_id' => $latestRevision->ID
+			$response['fc'] = array(
+				'last_revision_id' => $latestRevision->ID,
+				'last_revision_content' => apply_filters('the_content', $latestRevision->post_content)
 			);
 		}
 
@@ -222,16 +223,26 @@ class Plugin {
 		?><script>
 			jQuery(document).ready(function($) {
 
-				// Send post ID with first tick
-				wp.heartbeat.enqueue('fabrica-collaborate', { 'post_id' : jQuery('#post_ID').val() }, true);
+				// Increase heartbeat to 5 seconds
+				wp.heartbeat.interval('fast');
 
-				// Re-send the post ID with subsequent ticks
-				$(document).on('heartbeat-tick.fabrica-collaborate', function(e, data) {
-					wp.heartbeat.enqueue('fabrica-collaborate', { 'post_id' : jQuery('#post_ID').val() }, true);
+				// Send post ID with first tick
+				wp.heartbeat.enqueue('fc', { 'post_id' : jQuery('#post_ID').val() }, true);
+
+				// Listen for Heartbeat repsonses
+				$(document).on('heartbeat-tick.fc', function(e, data) {
+
+					// Re-send the post ID with each subsequent tick
+					wp.heartbeat.enqueue('fc', { 'post_id' : jQuery('#post_ID').val() }, true);
+
+					// [DEBUG] Log response
 					console.log(data);
-					// if (data.fc_last_revision_id != $('#fc_last_revision_id').val()) {
-						// alert('A new revision has been published while you have been editing.');
-					// }
+
+					// Check if revision has been update
+					// [TODO] Force conflict resolution immediately
+					if (data.fc.last_revision_id != $('#fc_last_revision_id').val()) {
+						console.log('A new revision has been published while you have been editing.');
+					}
 				});
 			});
 			</script>
