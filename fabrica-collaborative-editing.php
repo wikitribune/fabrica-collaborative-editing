@@ -171,7 +171,7 @@ class Plugin {
 		if ($savedContent === false) { return; }
 
 		?><h3 class="resolution-subhead">3. Re-submit the edited version:</h3>
-		<div class="resolution-actions"><?php submit_button('Resolve Edit Conflict', 'primary large', 'resolve-edit-conflict', false); ?></div><?php
+		<div class="resolution-actions"><?php submit_button('Resolve edit conflict', 'primary large', 'resolve-edit-conflict', false); ?></div><?php
 	}
 
 	// Render the diff
