@@ -154,7 +154,7 @@ class Plugin {
 		<h3 class="resolution-header">Your proposed changes clash with recent edits by other users. To resolve the conflict:</h3>
 		<h3 class="resolution-subhead">1. Review the differences between the latest submission and your own:</h3>
 		<?php echo $this->renderDiff($post->post_content, $savedContent); ?>
-		<h3 class="resolution-subhead">2. Amend your contribution to accommodate the changes made by other users:</h3><?php
+		<h3 class="resolution-subhead">2. Revise your contribution to accommodate the changes made by other users:</h3><?php
 
 		// Show the user's own edit in the body field
 		$post->post_content = $savedContent;
