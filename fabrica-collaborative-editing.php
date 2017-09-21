@@ -74,7 +74,7 @@ class Plugin {
 	public function disablePostEditLock() {
 		if (!in_array(get_current_screen()->post_type, self::$postTypesSupported)) { return; } // Exit for unsupported post types
 		add_filter('show_post_locked_dialog', '__return_false');
-		add_action('admin_print_footer_scripts', array($this, 'handleHeartbeatResponse'), 20);
+		add_action('admin_print_footer_scripts', array($this, 'enqueueScript'), 20);
 	}
 
 	// Add last revision info as form data on post edit
@@ -245,10 +245,14 @@ class Plugin {
 	}
 
 	// Process information received from server in Heartbeat
+	// Plus other interactions
 	// [TODO] move to JS file?
-	public function handleHeartbeatResponse() {
+	public function enqueueScript() {
 		?><script>
 			jQuery(document).ready(function($) {
+
+				// Don't show a warning when clicking the Resolve button
+				$('#resolve-edit-conflict').click(function() { $(window).off('beforeunload'); });
 
 				// Increase heartbeat to 5 seconds
 				wp.heartbeat.interval('fast');
