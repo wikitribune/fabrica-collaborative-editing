@@ -1,23 +1,23 @@
 <?php
 /*
-Plugin Name: Fabrica Collaborate
+Plugin Name: Fabrica Collaborative Editing
 Plugin URI:
 Description:
-Version: 0.0.1
+Version: 0.0.2
 Author: Fabrica
 Author URI: https://fabri.ca/
-Text Domain: fabrica-collaborate
+Text Domain: fabrica-collaborative-editing
 License: GPL-2.0+
 License URI: http://www.gnu.org/licenses/gpl-2.0.txt
 */
 
-namespace Fabrica\Collaborate;
+namespace Fabrica\CollaborativeEditing;
 
 if (!defined('WPINC')) { die(); }
 
 class Plugin {
 
-	public static $postTypesSupported = array('page', 'post');
+	public static $postTypesSupported = array('page', 'post', 'stories', 'projects');
 
 	public function __construct() {
 
@@ -35,14 +35,15 @@ class Plugin {
 		add_action('load-edit.php', array($this, 'disablePostListLock'));
 		add_action('load-post.php', array($this, 'disablePostEditLock'));
 		add_action('edit_form_top', array($this, 'cacheLastRevisionData'));
-		add_filter('wp_insert_post_data', array($this, 'resolveEditConflicts'), 1, 2);
-		add_action('edit_form_after_title', array($this, 'prepareDiff'));
+		add_filter('wp_insert_post_data', array($this, 'checkEditConflicts'), 1, 2);
+		add_action('edit_form_after_title', array($this, 'showResolutionHeader'));
+		add_action('edit_form_after_editor', array($this, 'showResolutionFooter'));
 	}
 
 	// Generates a transient ID from a post ID and user ID
 	public function generateTransientID($postID, $userID) {
 		if (!$postID || !$userID) { return false; }
-		return 'fc_edit_conflict_' . $postID . '_' . $userID;
+		return 'fce_edit_conflict_' . $postID . '_' . $userID;
 	}
 
 	// Returns the latest published revision, excluding autosaves
@@ -82,11 +83,11 @@ class Plugin {
 		if (!in_array($post->post_type, self::$postTypesSupported)) { return; } // Exit for unsupported post types
 		$latestRevision = $this->getLatestPublishedRevision($post->ID);
 		if (!$latestRevision) { return; }
-		echo '<input type="hidden" id="fc_last_revision_id" name="_fc_last_revision_id" value="' . $latestRevision->ID . '">';
+		echo '<input type="hidden" id="fce_last_revision_id" name="_fce_last_revision_id" value="' . $latestRevision->ID . '">';
 	}
 
 	// Check for intermediate edits and show a diff for resolution
-	public function resolveEditConflicts($data, $rawData) {
+	public function checkEditConflicts($data, $rawData) {
 
 		// Don't interfere with autosaves - shouldn't happen anyway since this hook is excluded from AJAX requests, but just in case
 		if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) { return $data; }
@@ -95,7 +96,7 @@ class Plugin {
 		if ($rawData['ID'] == 0) { return $data; }
 
 		// Only proceed if we've received the cached data about the previous revision (this will exclude unsupported post types)
-		if (!array_key_exists('_fc_last_revision_id', $rawData)) { return $data; }
+		if (!array_key_exists('_fce_last_revision_id', $rawData)) { return $data; }
 
 		// ... and if the current post actually has revisions
 		$latestRevision = $this->getLatestPublishedRevision($rawData['ID']);
@@ -105,13 +106,14 @@ class Plugin {
 		$transientID = $this->generateTransientID($rawData['ID'], get_current_user_id());
 
 		// If no new revision, this is either a regular save or a successful manual merge, so delete any cached changes and leave
-		if ($latestRevision->ID == $rawData['_fc_last_revision_id']) {
+		if ($latestRevision->ID == $rawData['_fce_last_revision_id']) {
 			delete_transient($transientID);
 			return $data;
 		}
 
 		// If still here, a new revision has been published, so check conflicts
 		// Retrieve the saved content of the post being edited, for the diff
+		// [TODO] support certain custom fields as well?
 		$savedPost = get_post($rawData['ID'], ARRAY_A);
 
 		// Check the diff to see if there's a conflict...
@@ -128,29 +130,55 @@ class Plugin {
 		return $data;
 	}
 
-	// Show diff if relevant
-	public function prepareDiff() {
-		global $post;
+	// Show header and steps for resolution
+	public function showResolutionHeader($post) {
+		if (!in_array(get_current_screen()->post_type, self::$postTypesSupported)) { return; } // Exit for unsupported post types
+
 		$transientID = $this->generateTransientID($post->ID, get_current_user_id());
 		$savedContent = get_transient($transientID);
 
 		// Leave if no transient (cached changes) set
 		if ($savedContent === false) { return; }
 
-		// Render diff
-		// [TODO] UI for granular merge conflict resolution (per paragraph)
-		echo $this->renderDiff($post->post_content, $savedContent);
+		// Display instructions and render diff
+		?>
+		<style>
+			table.diff { padding: 0.5rem; background-color: #fff; }
+			table.diff th { font-family: inherit; font-weight: normal; }
+			table.diff td { font-family: Georgia; font-size: 1rem; padding: 0.25rem 0.5rem; }
+			table.diff .diff-context { font-size: 13px; color: #999; padding: 0.5rem 0; }
+			h3.resolution-header { margin-top: 2rem; font-size: 1.125rem; font-weight: normal; text-align: center; }
+			h3.resolution-subhead { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #ddd; font-size: 1rem; text-align: center; }
+			div.resolution-actions { margin-bottom: 3rem; text-align: center; }
+		</style>
+		<h3 class="resolution-header">Your proposed changes clash with recent edits by other users. To resolve the conflict:</h3>
+		<h3 class="resolution-subhead">1. Review the differences between the latest submission and your own:</h3>
+		<?php echo $this->renderDiff($post->post_content, $savedContent); ?>
+		<h3 class="resolution-subhead">2. Amend your contribution to accommodate the changes made by other users:</h3><?php
 
-		// Show the user's edit in the body field
+		// Show the user's own edit in the body field
 		$post->post_content = $savedContent;
+	}
+
+	// Show footer and buttons for resolution
+	public function showResolutionFooter($post) {
+		if (!in_array(get_current_screen()->post_type, self::$postTypesSupported)) { return; } // Exit for unsupported post types
+
+		$transientID = $this->generateTransientID($post->ID, get_current_user_id());
+		$savedContent = get_transient($transientID);
+
+		// Leave if no transient (cached changes) set
+		if ($savedContent === false) { return; }
+
+		?><h3 class="resolution-subhead">3. Re-submit the edited version:</h3>
+		<div class="resolution-actions"><?php submit_button('Resolve Edit Conflict', 'primary large', 'resolve-edit-conflict', false); ?></div><?php
 	}
 
 	// Render the diff
 	public function renderDiff($left, $right) {
 		$args = array(
-			'title' => 'Your suggested edit clashes with a recent edit by another author: please resolve the conflict and re-publish',
-			'title_left' => 'Latest published version',
-			'title_right' => 'Your suggested edit'
+			'title_left' => 'Latest submission',
+			'title_right' => 'Your edit'
 		);
 
 		// [TODO] tidy this up a lot
@@ -165,37 +193,35 @@ class Plugin {
 		$diff = new \Text_Diff($left, $right);
 
 		// [TODO] Traverse $diff directly and remove need for WP_Text_Diff_Renderer_Table
+		// [TODO] reimplement wp_text_diff() locally using per-paragraph diffing
+		// [TODO] UI for granular merge conflict resolution (per paragraph)
 		$renderer = new \WP_Text_Diff_Renderer_Table($args);
 		$diff = $renderer->render($diff);
 
-		$r = "<table class='diff'>\n";
-		$r .= "<col class='content diffsplit left'><col class='content diffsplit middle'><col class='content diffsplit right'>";
-		if ($args['title'] || $args['title_left'] || $args['title_right']) {
-			$r .= "<thead>";
+		$output = '<table class="diff" id="diff">';
+		$output .= '<col class="content diffsplit left"><col class="content diffsplit middle"><col class="content diffsplit right">';
+		if (array_key_exists('title', $args) || array_key_exists('title_left', $args) || array_key_exists('title_right', $args)) {
+			$output .= '<thead>';
 		}
-		if ($args['title']) {
-			$r .= "<tr class='diff-title'><th colspan='3'>$args[title]</th></tr>\n";
+		if (array_key_exists('title', $args)) {
+			$output .= '<tr class="diff-title" id="diff"><th colspan="3">' . $args['title'] . '</th></tr>';
 		}
 		if ($args['title_left'] || $args['title_right'] ) {
-			$r .= "<tr class='diff-sub-title'>\n";
-			$r .= "\t<th>$args[title_left]</th>\n";
-			$r .= "\t<td></td><th>$args[title_right]</th>\n";
-			$r .= "</tr>\n";
+			$output .= '<tr class="diff-sub-title"><th>' . $args['title_left'] . '</th><td></td><th>' . $args['title_right'] . '</th></tr>';
 		}
-		if ($args['title'] || $args['title_left'] || $args['title_right']) {
-			$r .= "</thead>\n";
+		if (array_key_exists('title', $args) || array_key_exists('title_left', $args) || array_key_exists('title_right', $args)) {
+			$output .= '</thead>';
 		}
-		$r .= "<tbody>\n$diff\n</tbody>\n";
-		$r .= "</table>";
-		$r .= "<style>table.diff { margin: 2rem 0; } table.diff th { font-family: inherit; } table.diff td { font-family: Georgia; font-size: 1rem; } table.diff .diff-title th { font-size: 16px; }</style>";
-		return $r;
+		$output .= '<tbody>' . $diff . '</tbody>';
+		$output .= '</table>';
+		return $output;
 	}
 
 	// Filter information sent back to browser in Heartbeat
 	public function filterHeartbeatResponse($response, $data, $screenID) {
 
 		// Only modify response when we've been passed our own data
-		if (!isset($data['fc'])) {
+		if (!isset($data['fce'])) {
 			return $response;
 		}
 
@@ -203,9 +229,9 @@ class Plugin {
 		// $response['data'] = $data;
 
 		// Send the latest revision of current post which will be compared to the cached one to see if it's changed while editing
-		$latestRevision = $this->getLatestPublishedRevision($data['fc']['post_id']);
+		$latestRevision = $this->getLatestPublishedRevision($data['fce']['post_id']);
 		if ($latestRevision) {
-			$response['fc'] = array(
+			$response['fce'] = array(
 				'last_revision_id' => $latestRevision->ID,
 				'last_revision_content' => apply_filters('the_content', $latestRevision->post_content)
 			);
@@ -219,6 +245,7 @@ class Plugin {
 	}
 
 	// Process information received from server in Heartbeat
+	// [TODO] move to JS file?
 	public function handleHeartbeatResponse() {
 		?><script>
 			jQuery(document).ready(function($) {
@@ -227,20 +254,20 @@ class Plugin {
 				wp.heartbeat.interval('fast');
 
 				// Send post ID with first tick
-				wp.heartbeat.enqueue('fc', { 'post_id' : jQuery('#post_ID').val() }, true);
+				wp.heartbeat.enqueue('fce', { 'post_id' : jQuery('#post_ID').val() }, true);
 
 				// Listen for Heartbeat repsonses
-				$(document).on('heartbeat-tick.fc', function(e, data) {
+				$(document).on('heartbeat-tick.fce', function(e, data) {
 
 					// Re-send the post ID with each subsequent tick
-					wp.heartbeat.enqueue('fc', { 'post_id' : jQuery('#post_ID').val() }, true);
+					wp.heartbeat.enqueue('fce', { 'post_id' : jQuery('#post_ID').val() }, true);
 
 					// [DEBUG] Log response
 					console.log(data);
 
 					// Check if revision has been update
 					// [TODO] Force conflict resolution immediately
-					if (data.fc.last_revision_id != $('#fc_last_revision_id').val()) {
+					if (data.fce.last_revision_id != $('#fce_last_revision_id').val()) {
 						console.log('A new revision has been published while you have been editing.');
 					}
 				});
