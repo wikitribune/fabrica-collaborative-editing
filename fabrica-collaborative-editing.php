@@ -3,7 +3,7 @@
 Plugin Name: Fabrica Collaborative Editing
 Plugin URI:
 Description:
-Version: 0.0.2
+Version: 0.0.3
 Author: Fabrica
 Author URI: https://fabri.ca/
 Text Domain: fabrica-collaborative-editing
@@ -17,12 +17,24 @@ if (!defined('WPINC')) { die(); }
 
 class Plugin {
 
-	public static $postTypesSupported = array('page', 'post', 'stories', 'projects');
+	private $settings;
+	private $postTypesSupported = array();
 
 	public function __construct() {
 
 		// Exit now for non-admin requests
 		if (!is_admin()) { return; }
+
+		// Retrieve supported post types from settings
+		$this->settings = get_option('fce_settings');
+		$args = array('public' => true);
+		$postTypes = get_post_types($args);
+		foreach ($postTypes as $postType) {
+			$fieldName = $postType . '_collaboration_enabled';
+			if (isset($this->settings[$fieldName]) && $this->settings[$fieldName] == '1') {
+				$this->postTypesSupported[] = $postType;
+			}
+		}
 
 		// Heartbeat response is called via AJAX, so wouldn't get loaded via `load-post.php` hooks
 		// Also, high priority because needs to be applied late to override/cancel edit lock data
@@ -38,6 +50,9 @@ class Plugin {
 		add_filter('wp_insert_post_data', array($this, 'checkEditConflicts'), 1, 2);
 		add_action('edit_form_after_title', array($this, 'showResolutionHeader'));
 		add_action('edit_form_after_editor', array($this, 'showResolutionFooter'));
+		add_action('admin_menu', array($this, 'addSettingsPage'));
+		add_action('admin_init', array($this, 'registerSettings'));
+
 	}
 
 	// Generates a transient ID from a post ID and user ID
@@ -65,14 +80,14 @@ class Plugin {
 
 	// Completely disable Heartbeat on list page (to avoid 'X is editing' notifications)
 	public function disablePostListLock() {
-		if (!in_array(get_current_screen()->post_type, self::$postTypesSupported)) { return; } // Exit for unsupported post types
+		if (!in_array(get_current_screen()->post_type, $this->postTypesSupported)) { return; } // Exit for unsupported post types
 		wp_deregister_script('heartbeat');
 		add_filter('wp_check_post_lock_window', '__return_false');
 	}
 
 	// Leave Heartbeat active on post edit (so we can push edits for instant resolution) but override single-user lock
 	public function disablePostEditLock() {
-		if (!in_array(get_current_screen()->post_type, self::$postTypesSupported)) { return; } // Exit for unsupported post types
+		if (!in_array(get_current_screen()->post_type, $this->postTypesSupported)) { return; } // Exit for unsupported post types
 		add_filter('show_post_locked_dialog', '__return_false');
 		add_action('admin_print_footer_scripts', array($this, 'enqueueScript'), 20);
 	}
@@ -80,7 +95,7 @@ class Plugin {
 	// Add last revision info as form data on post edit
 	public function cacheLastRevisionData($post) {
 		if (!$post) { return; } // Exit if some problem with the post
-		if (!in_array($post->post_type, self::$postTypesSupported)) { return; } // Exit for unsupported post types
+		if (!in_array($post->post_type, $this->postTypesSupported)) { return; } // Exit for unsupported post types
 		$latestRevision = $this->getLatestPublishedRevision($post->ID);
 		if (!$latestRevision) { return; }
 		echo '<input type="hidden" id="fce_last_revision_id" name="_fce_last_revision_id" value="' . $latestRevision->ID . '">';
@@ -132,7 +147,7 @@ class Plugin {
 
 	// Show header and steps for resolution
 	public function showResolutionHeader($post) {
-		if (!in_array(get_current_screen()->post_type, self::$postTypesSupported)) { return; } // Exit for unsupported post types
+		if (!in_array(get_current_screen()->post_type, $this->postTypesSupported)) { return; } // Exit for unsupported post types
 
 		$transientID = $this->generateTransientID($post->ID, get_current_user_id());
 		$savedContent = get_transient($transientID);
@@ -162,7 +177,7 @@ class Plugin {
 
 	// Show footer and buttons for resolution
 	public function showResolutionFooter($post) {
-		if (!in_array(get_current_screen()->post_type, self::$postTypesSupported)) { return; } // Exit for unsupported post types
+		if (!in_array(get_current_screen()->post_type, $this->postTypesSupported)) { return; } // Exit for unsupported post types
 
 		$transientID = $this->generateTransientID($post->ID, get_current_user_id());
 		$savedContent = get_transient($transientID);
@@ -278,6 +293,87 @@ class Plugin {
 			});
 			</script>
 		<?php
+	}
+
+	// Register settings page
+	public function addSettingsPage() {
+		add_options_page(
+			'Fabrica Collaborative Editing Settings',
+			'Fabrica Collaborative Editing',
+			'manage_options',
+			'fabrica-collaborative-editing',
+			array($this, 'renderSettingsPage')
+		);
+	}
+
+	// Render settings page
+	public function renderSettingsPage() {
+		?><div class="wrap">
+			<h1>Collaborative Editing Settings</h1>
+			<form method="post" action="options.php"><?php
+				settings_fields('fce_settings');
+				do_settings_sections('fabrica-collaborative-editing');
+				submit_button();
+			?></form>
+		</div><?php
+	}
+
+	// Register and add settings
+	public function registerSettings() {
+		register_setting(
+			'fce_settings', // Option group
+			'fce_settings', // Option name
+			array($this, 'sanitizeSettings') // Sanitize
+		);
+
+		add_settings_section(
+			'enable_collaboration', // ID
+			'Enable collaborative editing', // Title
+			array($this, 'renderSettingsSectionInfo'), // Callback
+			'fabrica-collaborative-editing' // Page
+		);
+
+		// Register setting for each post type
+		$args = array('public' => true);
+		$postTypes = get_post_types($args, 'objects');
+		foreach ($postTypes as $postType) {
+			if ($postType->name == 'attachment') { continue; }
+			add_settings_field(
+				$postType->name . '_collaboration_enabled' , // ID
+				$postType->label, // Title
+				array($this, 'renderModeSetting'), // Callback
+				'fabrica-collaborative-editing', // Page
+				'enable_collaboration', // Section
+				array('postType' => $postType)
+			);
+		}
+	}
+
+
+	// Render section info
+	public function renderSettingsSectionInfo() {
+		echo '<p>Choose which post types can be collaboratively edited:</p>';
+	}
+
+	// Render mode checkboxes
+	public function renderModeSetting($data) {
+		$fieldName = $data['postType']->name . '_collaboration_enabled';
+		$savedValue = isset($this->settings[$fieldName]) ? $this->settings[$fieldName] : false;
+		echo '<input type="checkbox" id="' . $fieldName. '" name="fce_settings[' . $fieldName . ']" ' . checked($savedValue, '1', false) . ' value="1">';
+	}
+
+	// Sanitize saved fields
+	public function sanitizeSettings($input) {
+		$sanitizedInput = array();
+		$args = array('public' => true);
+		$postTypes = get_post_types($args);
+		foreach ($postTypes as $postType) {
+			$fieldName = $postType . '_collaboration_enabled';
+			if (isset($input[$fieldName]) && $input[$fieldName] == '1') {
+				$sanitizedInput[$fieldName] = 1;
+			}
+		}
+		return $sanitizedInput;
 	}
 }
 new Plugin();
