@@ -299,7 +299,7 @@ class Plugin {
 	public function addSettingsPage() {
 		add_options_page(
 			'Fabrica Collaborative Editing Settings',
-			'Fabrica Collaborative Editing',
+			'Collaborative Editing',
 			'manage_options',
 			'fabrica-collaborative-editing',
 			array($this, 'renderSettingsPage')
@@ -309,7 +309,7 @@ class Plugin {
 	// Render settings page
 	public function renderSettingsPage() {
 		?><div class="wrap">
-			<h1>Collaborative Editing Settings</h1>
+			<h1>Fabrica Collaborative Editing Settings</h1>
 			<form method="post" action="options.php"><?php
 				settings_fields('fce_settings');
 				do_settings_sections('fabrica-collaborative-editing');
@@ -320,12 +320,15 @@ class Plugin {
 
 	// Register and add settings
 	public function registerSettings() {
+
+		// Initialize
 		register_setting(
 			'fce_settings', // Option group
 			'fce_settings', // Option name
 			array($this, 'sanitizeSettings') // Sanitize
 		);
 
+		// Register section
 		add_settings_section(
 			'enable_collaboration', // ID
 			'Enable collaborative editing', // Title
@@ -339,7 +342,7 @@ class Plugin {
 		foreach ($postTypes as $postType) {
 			if ($postType->name == 'attachment') { continue; }
 			add_settings_field(
-				$postType->name . '_collaboration_enabled' , // ID
+				$postType->name . '_collaboration_enabled', // ID
 				$postType->label, // Title
 				array($this, 'renderModeSetting'), // Callback
 				'fabrica-collaborative-editing', // Page
