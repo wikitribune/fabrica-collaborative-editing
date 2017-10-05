@@ -25,17 +25,6 @@ class Plugin {
 		// Exit now for non-admin requests
 		if (!is_admin()) { return; }
 
-		// Retrieve supported post types from settings
-		$this->settings = get_option('fce_settings');
-		$args = array('public' => true);
-		$postTypes = get_post_types($args);
-		foreach ($postTypes as $postType) {
-			$fieldName = $postType . '_collaboration_enabled';
-			if (isset($this->settings[$fieldName]) && $this->settings[$fieldName] == '1') {
-				$this->postTypesSupported[] = $postType;
-			}
-		}
-
 		// Heartbeat response is called via AJAX, so wouldn't get loaded via `load-post.php` hooks
 		// Also, high priority because needs to be applied late to override/cancel edit lock data
 		add_filter('heartbeat_received', array($this, 'filterHeartbeatResponse'), 999999, 3);
@@ -52,7 +41,6 @@ class Plugin {
 		add_action('edit_form_after_editor', array($this, 'showResolutionFooter'));
 		add_action('admin_menu', array($this, 'addSettingsPage'));
 		add_action('admin_init', array($this, 'registerSettings'));
-
 	}
 
 	// Generates a transient ID from a post ID and user ID
@@ -155,6 +143,9 @@ class Plugin {
 		// Leave if no transient (cached changes) set
 		if ($savedContent === false) { return; }
 
+		// Restrict copying and pasting
+		// add_filter('tiny_mce_before_init', array($this, 'setInvalidTinyMCEElements'));
+
 		// Display instructions and render diff
 		?>
 		<style>
@@ -173,6 +164,12 @@ class Plugin {
 
 		// Show the user's own edit in the body field
 		$post->post_content = $savedContent;
+	}
+
+	// Disallow pasting certain tags during merge resolution
+	public function setInvalidTinyMCEElements($settings) {
+		$settings['invalid_elements'] = 'table,tr,td';
+		return $settings;
 	}
 
 	// Show footer and buttons for resolution
@@ -196,10 +193,9 @@ class Plugin {
 			'title_right' => 'Your edit'
 		);
 
-		// [TODO] tidy this up a lot
-		if (!class_exists('WP_Text_Diff_Renderer_Table', false)) {
-			require(ABSPATH . WPINC . '/wp-diff.php');
-		}
+		// require('inc/fce-text-diff-renderer-table.php');
+		require_once(ABSPATH . WPINC . '/wp-diff.php');
+
 		$left = normalize_whitespace($left);
 		$right = normalize_whitespace($right);
 
@@ -210,6 +206,7 @@ class Plugin {
 		// [TODO] Traverse $diff directly and remove need for WP_Text_Diff_Renderer_Table
 		// [TODO] reimplement wp_text_diff() locally using per-paragraph diffing
 		// [TODO] UI for granular merge conflict resolution (per paragraph)
+		// $renderer = new \FCE_Text_Diff_Renderer_Table($args);
 		$renderer = new \WP_Text_Diff_Renderer_Table($args);
 		$diff = $renderer->render($diff);
 
@@ -321,6 +318,17 @@ class Plugin {
 	// Register and add settings
 	public function registerSettings() {
 
+		// Retrieve supported post types from settings
+		$this->settings = get_option('fce_settings');
+		$args = array('public' => true);
+		$postTypes = get_post_types($args);
+		foreach ($postTypes as $postType) {
+			$fieldName = $postType . '_collaboration_enabled';
+			if (isset($this->settings[$fieldName]) && $this->settings[$fieldName] == '1') {
+				$this->postTypesSupported[] = $postType;
+			}
+		}
+
 		// Initialize
 		register_setting(
 			'fce_settings', // Option group
@@ -355,7 +363,7 @@ class Plugin {
 
 	// Render section info
 	public function renderSettingsSectionInfo() {
-		echo '<p>Choose which post types can be collaboratively edited:</p>';
+		echo '<p>Choose which post types can be collaboratively edited.</p>';
 	}
 
 	// Render mode checkboxes
