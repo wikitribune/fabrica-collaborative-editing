@@ -308,7 +308,7 @@ class Plugin {
 	// Render settings page
 	public function renderSettingsPage() {
 		?><div class="wrap">
-			<h1><?php _("Fabrica Collaborative Editing Settings", self::DOMAIN); ?></h1>
+			<h1><?php _e("Fabrica Collaborative Editing Settings", self::DOMAIN); ?></h1>
 			<form method="post" action="options.php"><?php
 				settings_fields('fce-settings');
 				do_settings_sections('fce-settings');
