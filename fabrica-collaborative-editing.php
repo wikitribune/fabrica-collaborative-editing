@@ -157,10 +157,10 @@ class Plugin {
 			h3.resolution-subhead { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #ddd; font-size: 1rem; text-align: center; }
 			div.resolution-actions { margin-bottom: 3rem; text-align: center; }
 		</style>
-		<h3 class="resolution-header">Your proposed changes clash with recent edits by other users. To resolve the conflict:</h3>
-		<h3 class="resolution-subhead">1. Review the differences between the latest submission and your own:</h3>
+		<h3 class="resolution-header"><?php _e("Your proposed changes clash with recent edits by other users. To resolve the conflict:", 'fabrica-collaborative-editing'); ?></h3>
+		<h3 class="resolution-subhead">1. <?php _e("Review the differences between the latest submission and your own:", 'fabrica-collaborative-editing'); ?></h3>
 		<?php echo $this->renderDiff($post->post_content, $savedContent); ?>
-		<h3 class="resolution-subhead">2. Revise your contribution to accommodate the changes made by other users:</h3><?php
+		<h3 class="resolution-subhead">2. <?php _e("Revise your contribution to accommodate the changes made by other users:", 'fabrica-collaborative-editing'); ?></h3><?php
 
 		// Show the user's own edit in the body field
 		$post->post_content = $savedContent;
@@ -182,15 +182,15 @@ class Plugin {
 		// Leave if no transient (cached changes) set
 		if ($savedContent === false) { return; }
 
-		?><h3 class="resolution-subhead">3. Re-submit the edited version:</h3>
+		?><h3 class="resolution-subhead">3. <?php _e("Re-submit the edited version:", 'fabrica-collaborative-editing'); ?></h3>
 		<div class="resolution-actions"><?php submit_button('Resolve edit conflict', 'primary large', 'resolve-edit-conflict', false); ?></div><?php
 	}
 
 	// Render the diff
 	public function renderDiff($left, $right) {
 		$args = array(
-			'title_left' => 'Latest submission',
-			'title_right' => 'Your edit'
+			'title_left' => __("Latest submission", 'fabrica-collaborative-editing'),
+			'title_right' => __("Your edit", 'fabrica-collaborative-editing')
 		);
 
 		// require('inc/fce-text-diff-renderer-table.php');
@@ -306,7 +306,7 @@ class Plugin {
 	// Render settings page
 	public function renderSettingsPage() {
 		?><div class="wrap">
-			<h1>Fabrica Collaborative Editing Settings</h1>
+			<h1><?php _("Fabrica Collaborative Editing Settings", 'fabrica-collaborative-editing'); ?></h1>
 			<form method="post" action="options.php"><?php
 				settings_fields('fce_settings');
 				do_settings_sections('fabrica-collaborative-editing');
@@ -339,7 +339,7 @@ class Plugin {
 		// Register section
 		add_settings_section(
 			'enable_collaboration', // ID
-			'Enable collaborative editing', // Title
+			_("Enable collaborative editing", 'fabrica-collaborative-editing'), // Title
 			array($this, 'renderSettingsSectionInfo'), // Callback
 			'fabrica-collaborative-editing' // Page
 		);
@@ -351,7 +351,7 @@ class Plugin {
 			if ($postType->name == 'attachment') { continue; }
 			add_settings_field(
 				$postType->name . '_collaboration_enabled', // ID
-				$postType->label, // Title
+				__($postType->label, 'fabrica-collaborative-editing'), // Title
 				array($this, 'renderModeSetting'), // Callback
 				'fabrica-collaborative-editing', // Page
 				'enable_collaboration', // Section
@@ -363,7 +363,7 @@ class Plugin {
 
 	// Render section info
 	public function renderSettingsSectionInfo() {
-		echo '<p>Choose which post types can be collaboratively edited.</p>';
+		echo '<p>' . __("Choose which post types can be collaboratively edited.", 'fabrica-collaborative-editing') . '</p>';
 	}
 
 	// Render mode checkboxes
