@@ -17,7 +17,9 @@ if (!defined('WPINC')) { die(); }
 
 class Plugin {
 
-	private $settings;
+	const DOMAIN = 'fabrica-collaborative-editing';
+
+	private $settings = array();
 	private $postTypesSupported = array();
 
 	public function __construct() {
@@ -44,13 +46,13 @@ class Plugin {
 	}
 
 	// Generates a transient ID from a post ID and user ID
-	public function generateTransientID($postID, $userID) {
+	private function generateTransientID($postID, $userID) {
 		if (!$postID || !$userID) { return false; }
 		return 'fce_edit_conflict_' . $postID . '_' . $userID;
 	}
 
 	// Returns the latest published revision, excluding autosaves
-	public function getLatestPublishedRevision($postID) {
+	private function getLatestPublishedRevision($postID) {
 		$args = array('posts_per_page', 1, 'suppress_filters' => false);
 		add_filter('posts_where', array($this, 'filterOutAutosaves'), 10, 1);
 		$revisions = wp_get_post_revisions($postID, $args);
@@ -157,10 +159,10 @@ class Plugin {
 			h3.resolution-subhead { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #ddd; font-size: 1rem; text-align: center; }
 			div.resolution-actions { margin-bottom: 3rem; text-align: center; }
 		</style>
-		<h3 class="resolution-header"><?php _e("Your proposed changes clash with recent edits by other users. To resolve the conflict:", 'fabrica-collaborative-editing'); ?></h3>
-		<h3 class="resolution-subhead">1. <?php _e("Review the differences between the latest submission and your own:", 'fabrica-collaborative-editing'); ?></h3>
+		<h3 class="resolution-header"><?php _e("Your proposed changes clash with recent edits by other users. To resolve the conflict:", self::DOMAIN); ?></h3>
+		<h3 class="resolution-subhead">1. <?php _e("Review the differences between the latest submission and your own:", self::DOMAIN); ?></h3>
 		<?php echo $this->renderDiff($post->post_content, $savedContent); ?>
-		<h3 class="resolution-subhead">2. <?php _e("Revise your contribution to accommodate the changes made by other users:", 'fabrica-collaborative-editing'); ?></h3><?php
+		<h3 class="resolution-subhead">2. <?php _e("Revise your contribution to accommodate the changes made by other users:", self::DOMAIN); ?></h3><?php
 
 		// Show the user's own edit in the body field
 		$post->post_content = $savedContent;
@@ -182,15 +184,15 @@ class Plugin {
 		// Leave if no transient (cached changes) set
 		if ($savedContent === false) { return; }
 
-		?><h3 class="resolution-subhead">3. <?php _e("Re-submit the edited version:", 'fabrica-collaborative-editing'); ?></h3>
+		?><h3 class="resolution-subhead">3. <?php _e("Re-submit the edited version:", self::DOMAIN); ?></h3>
 		<div class="resolution-actions"><?php submit_button('Resolve edit conflict', 'primary large', 'resolve-edit-conflict', false); ?></div><?php
 	}
 
 	// Render the diff
-	public function renderDiff($left, $right) {
+	private function renderDiff($left, $right) {
 		$args = array(
-			'title_left' => __("Latest submission", 'fabrica-collaborative-editing'),
-			'title_right' => __("Your edit", 'fabrica-collaborative-editing')
+			'title_left' => __("Latest submission", self::DOMAIN),
+			'title_right' => __("Your edit", self::DOMAIN)
 		);
 
 		// require('inc/fce-text-diff-renderer-table.php');
@@ -298,7 +300,7 @@ class Plugin {
 			'Fabrica Collaborative Editing Settings',
 			'Collaborative Editing',
 			'manage_options',
-			'fabrica-collaborative-editing',
+			'fce-settings',
 			array($this, 'renderSettingsPage')
 		);
 	}
@@ -306,10 +308,10 @@ class Plugin {
 	// Render settings page
 	public function renderSettingsPage() {
 		?><div class="wrap">
-			<h1><?php _("Fabrica Collaborative Editing Settings", 'fabrica-collaborative-editing'); ?></h1>
+			<h1><?php _("Fabrica Collaborative Editing Settings", self::DOMAIN); ?></h1>
 			<form method="post" action="options.php"><?php
-				settings_fields('fce_settings');
-				do_settings_sections('fabrica-collaborative-editing');
+				settings_fields('fce-settings');
+				do_settings_sections('fce-settings');
 				submit_button();
 			?></form>
 		</div><?php
@@ -319,7 +321,7 @@ class Plugin {
 	public function registerSettings() {
 
 		// Retrieve supported post types from settings
-		$this->settings = get_option('fce_settings');
+		$this->settings = get_option('fce-settings');
 		$args = array('public' => true);
 		$postTypes = get_post_types($args);
 		foreach ($postTypes as $postType) {
@@ -331,17 +333,17 @@ class Plugin {
 
 		// Initialize
 		register_setting(
-			'fce_settings', // Option group
-			'fce_settings', // Option name
+			'fce-settings', // Option group
+			'fce-settings', // Option name
 			array($this, 'sanitizeSettings') // Sanitize
 		);
 
 		// Register section
 		add_settings_section(
 			'enable_collaboration', // ID
-			_("Enable collaborative editing", 'fabrica-collaborative-editing'), // Title
+			_("Enable collaborative editing", self::DOMAIN), // Title
 			array($this, 'renderSettingsSectionInfo'), // Callback
-			'fabrica-collaborative-editing' // Page
+			'fce-settings' // Page
 		);
 
 		// Register setting for each post type
@@ -351,9 +353,9 @@ class Plugin {
 			if ($postType->name == 'attachment') { continue; }
 			add_settings_field(
 				$postType->name . '_collaboration_enabled', // ID
-				__($postType->label, 'fabrica-collaborative-editing'), // Title
+				__($postType->label, self::DOMAIN), // Title
 				array($this, 'renderModeSetting'), // Callback
-				'fabrica-collaborative-editing', // Page
+				'fce-settings', // Page
 				'enable_collaboration', // Section
 				array('postType' => $postType)
 			);
@@ -363,14 +365,14 @@ class Plugin {
 
 	// Render section info
 	public function renderSettingsSectionInfo() {
-		echo '<p>' . __("Choose which post types can be collaboratively edited.", 'fabrica-collaborative-editing') . '</p>';
+		echo '<p>' . __("Choose which post types can be collaboratively edited.", self::DOMAIN) . '</p>';
 	}
 
 	// Render mode checkboxes
 	public function renderModeSetting($data) {
 		$fieldName = $data['postType']->name . '_collaboration_enabled';
 		$savedValue = isset($this->settings[$fieldName]) ? $this->settings[$fieldName] : false;
-		echo '<input type="checkbox" id="' . $fieldName. '" name="fce_settings[' . $fieldName . ']" ' . checked($savedValue, '1', false) . ' value="1">';
+		echo '<input type="checkbox" id="' . $fieldName. '" name="fce-settings[' . $fieldName . ']" ' . checked($savedValue, '1', false) . ' value="1">';
 	}
 
 	// Sanitize saved fields
