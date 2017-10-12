@@ -122,7 +122,9 @@ class Plugin {
 		$savedPost = get_post($rawData['ID'], ARRAY_A);
 
 		// Check the diff to see if there's a conflict...
-		if (wp_text_diff($savedPost['post_content'], $data['post_content'])) {
+		$hasConflicts['post_title'] = $savedPost['post_title'] != $data['post_title'] ? true : false;
+		$hasConflicts['post_content'] = $savedPost['post_content'] != $data['post_content'] ? true : false;
+		if ($hasConflicts['post_content']) {
 
 			// ... there is, so save the conflicted data in a transient based on the post ID and user ID
 			set_transient($transientID, stripslashes($data['post_content']), WEEK_IN_SECONDS);
@@ -146,22 +148,25 @@ class Plugin {
 		if ($savedContent === false) { return; }
 
 		// Restrict copying and pasting
-		// add_filter('tiny_mce_before_init', array($this, 'setInvalidTinyMCEElements'));
+		add_filter('tiny_mce_before_init', array($this, 'setInvalidTinyMCEElements'));
 
 		// Display instructions and render diff
 		?>
 		<style>
-			table.diff { padding: 0.5rem; background-color: #fff; }
+			table.diff { padding: 0.5rem; background-color: #fff; white-space: initial; }
 			table.diff th { font-family: inherit; font-weight: normal; }
-			table.diff td { font-family: Georgia; font-size: 1rem; padding: 0.25rem 0.5rem; }
-			table.diff .diff-context { font-size: 13px; color: #999; padding: 0.5rem 0; }
-			h3.resolution-header { margin-top: 2rem; font-size: 1.125rem; font-weight: normal; text-align: center; }
+			table.diff td { font-family: Georgia; font-size: 15px; padding: 0.25rem 0.5rem; user-select: none; }
+			table.diff tbody tr td:last-child { user-select: initial; }
+			table.diff td img { max-width: 85% !important; height: auto; margin: 0 auto; display: block; border: 1px solid #ccc; }
+			table.diff .diff-context { font-size: 12px; color: #999; padding: 0.5rem 0; }
+			table.diff td ul li { list-style: circle; margin-left: 2em; }
+			h3.resolution-header { background-color: #333; color: #fff; margin-top: 2rem; padding: 1rem; font-size: 1.125rem; font-weight: normal; text-align: center; }
 			h3.resolution-subhead { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #ddd; font-size: 1rem; text-align: center; }
 			div.resolution-actions { margin-bottom: 3rem; text-align: center; }
 		</style>
 		<h3 class="resolution-header"><?php _e("Your proposed changes clash with recent edits by other users. To resolve the conflict:", self::DOMAIN); ?></h3>
 		<h3 class="resolution-subhead">1. <?php _e("Review the differences between the latest submission and your own:", self::DOMAIN); ?></h3>
-		<?php echo $this->renderDiff($post->post_content, $savedContent); ?>
+		<?php echo $this->renderDiff($savedContent, $post->post_content); ?>
 		<h3 class="resolution-subhead">2. <?php _e("Revise your contribution to accommodate the changes made by other users:", self::DOMAIN); ?></h3><?php
 
 		// Show the user's own edit in the body field
@@ -170,7 +175,7 @@ class Plugin {
 
 	// Disallow pasting certain tags during merge resolution
 	public function setInvalidTinyMCEElements($settings) {
-		$settings['invalid_elements'] = 'table,tr,td';
+		$settings['invalid_elements'] = 'table, ins, del';
 		return $settings;
 	}
 
@@ -191,12 +196,11 @@ class Plugin {
 	// Render the diff
 	private function renderDiff($left, $right) {
 		$args = array(
-			'title_left' => __("Latest submission", self::DOMAIN),
-			'title_right' => __("Your edit", self::DOMAIN)
+			'title_left' => __("Your version", self::DOMAIN),
+			'title_right' => __("Latest version", self::DOMAIN)
 		);
 
-		// require('inc/fce-text-diff-renderer-table.php');
-		require_once(ABSPATH . WPINC . '/wp-diff.php');
+		require('inc/fce-wysiwyg-diff-renderer-table.php');
 
 		$left = normalize_whitespace($left);
 		$right = normalize_whitespace($right);
@@ -208,8 +212,7 @@ class Plugin {
 		// [TODO] Traverse $diff directly and remove need for WP_Text_Diff_Renderer_Table
 		// [TODO] reimplement wp_text_diff() locally using per-paragraph diffing
 		// [TODO] UI for granular merge conflict resolution (per paragraph)
-		// $renderer = new \FCE_Text_Diff_Renderer_Table($args);
-		$renderer = new \WP_Text_Diff_Renderer_Table($args);
+		$renderer = new \FCE_WYSIWYG_Diff_Renderer_Table($args);
 		$diff = $renderer->render($diff);
 
 		$output = '<table class="diff" id="diff">';
