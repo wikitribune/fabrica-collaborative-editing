@@ -30,7 +30,7 @@ class Base extends Singleton {
 		add_action('load-edit.php', array($this, 'disablePostListLock'));
 		add_action('load-post.php', array($this, 'disablePostEditLock'));
 		add_action('edit_form_top', array($this, 'cacheLastRevisionData'));
-		add_filter('wp_insert_post_data', array($this, 'checkEditConflicts'), 1, 2);
+		add_filter('wp_insert_post_data', array($this, 'checkEditConflicts'), 0, 2);
 		add_action('edit_form_after_title', array($this, 'showResolutionHeader'));
 		add_action('edit_form_after_editor', array($this, 'showResolutionFooter'));
 	}
@@ -92,6 +92,12 @@ class Base extends Singleton {
 		$latestRevision = $this->getLatestPublishedRevision($post->ID);
 		if (!$latestRevision) { return; }
 		echo '<input type="hidden" id="fce_last_revision_id" name="_fce_last_revision_id" value="' . $latestRevision->ID . '">';
+
+		// Also, set title to suggested version if transient saved
+		$transientID = $this->generateTransientID($post->ID, get_current_user_id());
+		$cachedEdit = get_transient($transientID);
+		if ($cachedEdit === false) { return; }
+		if (array_key_exists('post_title', $cachedEdit)) { $post->post_title = $cachedEdit['post_title']; }
 	}
 
 	// Check for intermediate edits and show a diff for resolution
@@ -124,16 +130,20 @@ class Base extends Singleton {
 		// [TODO] support certain custom fields as well?
 		$savedPost = get_post($rawData['ID'], ARRAY_A);
 
-		// Check the diff to see if there's a conflict...
-		$hasConflicts['post_title'] = $savedPost['post_title'] != $data['post_title'] ? true : false;
-		$hasConflicts['post_content'] = $savedPost['post_content'] != $data['post_content'] ? true : false;
-		if ($hasConflicts['post_content']) {
+		// Diff the title, body and other fields to see if there's a conflict...
+		$conflictsData = array();
+		if ($savedPost['post_title'] != wp_unslash($data['post_title'])) {
+			$conflictsData['post_title'] = wp_unslash($data['post_title']);
+			$data['post_title'] = $savedPost['post_title']; // Don't save a change to the post yet
+		}
+		if ($savedPost['post_content'] != wp_unslash($data['post_content'])) {
+			$conflictsData['post_content'] = wp_unslash($data['post_content']);
+			$data['post_content'] = $savedPost['post_content']; // Don't save a change to the post yet
+		}
+		if (count($conflictsData) > 0) {
 
 			// ... there is, so save the conflicted data in a transient based on the post ID and user ID
-			set_transient($transientID, stripslashes($data['post_content']), WEEK_IN_SECONDS);
-
-			// Revert to previously saved version for now - WP will not create a new revision
-			$data['post_content'] = $savedPost['post_content'];
+			set_transient($transientID, $conflictsData, WEEK_IN_SECONDS);
 		}
 
 		// Return data for saving
@@ -145,17 +155,16 @@ class Base extends Singleton {
 		if (!in_array(get_current_screen()->post_type, $this->postTypesSupported)) { return; } // Exit for unsupported post types
 
 		$transientID = $this->generateTransientID($post->ID, get_current_user_id());
-		$savedContent = get_transient($transientID);
+		$cachedEdit = get_transient($transientID);
 
 		// Leave if no transient (cached changes) set
-		if ($savedContent === false) { return; }
+		if ($cachedEdit === false) { return; }
 
 		// Restrict copying and pasting
 		add_filter('tiny_mce_before_init', array($this, 'setInvalidTinyMCEElements'));
 
 		// Display instructions and render diff
-		?>
-		<style>
+		?><style>
 			table.diff { padding: 0.5rem; background-color: #fff; white-space: initial; }
 			table.diff th { font-family: inherit; font-weight: normal; }
 			table.diff td { font-family: Georgia; font-size: 15px; padding: 0.25rem 0.5rem; user-select: none; }
@@ -167,13 +176,19 @@ class Base extends Singleton {
 			h3.resolution-subhead { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #ddd; font-size: 1rem; text-align: center; }
 			div.resolution-actions { margin-bottom: 3rem; text-align: center; }
 		</style>
-		<h3 class="resolution-header"><?php _e("Your proposed changes clash with recent edits by other users. To resolve the conflict:", self::DOMAIN); ?></h3>
-		<h3 class="resolution-subhead">1. <?php _e("Review the differences between the latest submission and your own:", self::DOMAIN); ?></h3>
-		<?php echo $this->renderDiff($savedContent, $post->post_content); ?>
-		<h3 class="resolution-subhead">2. <?php _e("Revise your contribution to accommodate the changes made by other users:", self::DOMAIN); ?></h3><?php
+		<h3 class="resolution-header"><?php _e("Your proposed changes clash with recent edits by other users.<br>Review the latest version, then copy and paste changes you would like to merge in your version.", self::DOMAIN); ?></h3><?php
+		foreach ($cachedEdit as $key => $content) {
+			if ($key == 'post_title') {
+				echo '<h3 class="resolution-subhead">' . __("Title", self::DOMAIN) . '</h3>';
+				echo $this->renderDiff($content, get_the_title($post->ID));
+			} else if ($key == 'post_content') {
+				echo '<h3 class="resolution-subhead">' . __("Content", self::DOMAIN) . '</h3>';
+				echo $this->renderDiff($content, $post->post_content);
+			}
+		}
 
-		// Show the user's own edit in the body field
-		$post->post_content = $savedContent;
+		// Show the user's own edit in the body field (title already set in an earlier hook)
+		if (array_key_exists('post_content', $cachedEdit)) { $post->post_content = $cachedEdit['post_content']; }
 	}
 
 	// Disallow pasting certain tags during merge resolution
@@ -187,10 +202,10 @@ class Base extends Singleton {
 		if (!in_array(get_current_screen()->post_type, $this->postTypesSupported)) { return; } // Exit for unsupported post types
 
 		$transientID = $this->generateTransientID($post->ID, get_current_user_id());
-		$savedContent = get_transient($transientID);
+		$cachedEdit = get_transient($transientID);
 
 		// Leave if no transient (cached changes) set
-		if ($savedContent === false) { return; }
+		if ($cachedEdit === false) { return; }
 
 		?><h3 class="resolution-subhead">3. <?php _e("Re-submit the edited version:", self::DOMAIN); ?></h3>
 		<div class="resolution-actions"><?php submit_button('Resolve edit conflict', 'primary large', 'resolve-edit-conflict', false); ?></div><?php
@@ -198,12 +213,12 @@ class Base extends Singleton {
 
 	// Render the diff
 	private function renderDiff($left, $right) {
+		require_once('fce-wysiwyg-diff-renderer-table.php');
+
 		$args = array(
 			'title_left' => __("Your version", self::DOMAIN),
 			'title_right' => __("Latest version", self::DOMAIN)
 		);
-
-		require('fce-wysiwyg-diff-renderer-table.php');
 
 		$left = normalize_whitespace($left);
 		$right = normalize_whitespace($right);
