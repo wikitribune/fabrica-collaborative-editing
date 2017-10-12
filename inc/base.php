@@ -172,18 +172,18 @@ class Base extends Singleton {
 			table.diff td img { max-width: 85% !important; height: auto; margin: 0 auto; display: block; border: 1px solid #ccc; }
 			table.diff .diff-context { font-size: 12px; color: #999; padding: 0.5rem 0; }
 			table.diff td ul li { list-style: circle; margin-left: 2em; }
-			h3.resolution-header { background-color: #333; color: #fff; margin-top: 2rem; padding: 1rem; font-size: 1.125rem; font-weight: normal; text-align: center; }
-			h3.resolution-subhead { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #ddd; font-size: 1rem; text-align: center; }
+			h3.resolution-header { background-color: #444; color: #fff; margin-top: 2rem; padding: 1rem; font-size: 1.125rem; font-weight: normal; line-height: 1.4; text-align: center; }
+			h3.resolution-subhead { margin-top: 2rem; padding-top: 1rem; font-size: 1rem; text-align: center; }
 			div.resolution-actions { margin-bottom: 3rem; text-align: center; }
 		</style>
-		<h3 class="resolution-header"><?php _e("Your proposed changes clash with recent edits by other users.<br>Review the latest version, then copy and paste changes you would like to merge in your version.", self::DOMAIN); ?></h3><?php
+		<h3 class="resolution-header"><strong><?php _e("Your proposed changes clash with recent edits by other users.", self::DOMAIN); ?></strong><br><?php _e("Review the latest version, then copy and paste changes you would like to merge in your version.", self::DOMAIN); ?></h3><?php
 		foreach ($cachedEdit as $key => $content) {
 			if ($key == 'post_title') {
 				echo '<h3 class="resolution-subhead">' . __("Title", self::DOMAIN) . '</h3>';
-				echo $this->renderDiff($content, get_the_title($post->ID));
+				echo $this->renderDiff($content, get_the_title($post->ID)); // $post->post_title already hard reset above for the title field
 			} else if ($key == 'post_content') {
 				echo '<h3 class="resolution-subhead">' . __("Content", self::DOMAIN) . '</h3>';
-				echo $this->renderDiff($content, $post->post_content);
+				echo $this->renderDiff($content, $post->post_content, true);
 			}
 		}
 
@@ -212,7 +212,7 @@ class Base extends Singleton {
 	}
 
 	// Render the diff
-	private function renderDiff($left, $right) {
+	private function renderDiff($left, $right, $wysiwyg = false) {
 		require_once('fce-wysiwyg-diff-renderer-table.php');
 
 		$args = array(
@@ -227,7 +227,11 @@ class Base extends Singleton {
 		$right = explode("\n", $right);
 		$diff = new \Text_Diff($left, $right);
 
-		$renderer = new \FCE_WYSIWYG_Diff_Renderer_Table($args);
+		if ($wysiwyg) {
+			$renderer = new \FCE_WYSIWYG_Diff_Renderer_Table($args);
+		} else {
+			$renderer = new \WP_Text_Diff_Renderer_Table($args);
+		}
 		$diff = $renderer->render($diff);
 
 		$output = '<table class="diff" id="diff">';
