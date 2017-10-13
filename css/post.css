@@ -64,10 +64,16 @@ table.diff th {
 
 table.diff td {
 	padding: 0.25rem 0.5rem;
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
 	user-select: none;
 }
 
 table.diff tbody tr td:last-child {
+	-webkit-user-select: initial;
+	-moz-user-select: initial;
+	-ms-user-select: initial;
 	user-select: initial;
 }
 
