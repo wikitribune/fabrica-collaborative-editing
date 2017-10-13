@@ -32,7 +32,6 @@ class Base extends Singleton {
 		add_action('edit_form_top', array($this, 'cacheLastRevisionData'));
 		add_filter('wp_insert_post_data', array($this, 'checkEditConflicts'), 0, 2);
 		add_action('edit_form_after_title', array($this, 'showResolutionHeader'));
-		add_action('admin_enqueue_scripts', array($this, 'enqueueScripts'));
 	}
 
 	// Cache supported post types
@@ -82,7 +81,8 @@ class Base extends Singleton {
 	public function disablePostEditLock() {
 		if (!in_array(get_current_screen()->post_type, $this->postTypesSupported)) { return; } // Exit for unsupported post types
 		add_filter('show_post_locked_dialog', '__return_false');
-		add_action('admin_enqueue_scripts', array($this, 'enqueueHeartbeatScript'), 20);
+		wp_enqueue_script('fce-post', plugin_dir_url(Plugin::MAIN_FILE) . 'js/post.js', array('jquery'));
+		wp_enqueue_style('fce-conflicts', plugin_dir_url(Plugin::MAIN_FILE) . 'css/post.css');
 	}
 
 	// Add last revision info as form data on post edit
@@ -327,21 +327,6 @@ class Base extends Singleton {
 
 		// Send back to the browser
 		return $response;
-	}
-
-	// Process information received from server in Heartbeat
-	// Plus other interactions
-	// [TODO] move to JS file?
-	public function enqueueHeartbeatScript() {
-		wp_enqueue_script('fce-heartbeat', plugin_dir_url(Plugin::MAIN_FILE) . 'js/heartbeat.js', array('jquery'));
-	}
-
-	// Set JSs and CSSs for Edit post and Browse revisions pages
-	public function enqueueScripts($hookSuffix) {
-		if ($hookSuffix == 'post.php') {
-			wp_enqueue_style('fce-conflicts', plugin_dir_url(Plugin::MAIN_FILE) . 'css/conflicts.css');
-			wp_enqueue_script('fce-conflicts', plugin_dir_url(Plugin::MAIN_FILE) . 'js/conflicts.js', array('jquery'));
-		}
 	}
 }
 
