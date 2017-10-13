@@ -86,9 +86,9 @@ class FCE_WYSIWYG_Diff_Renderer_Table extends WP_Text_Diff_Renderer_Table {
 				if (preg_match_all('!(<ins>.*?</ins>|<del>.*?</del>)!', $diff, $diff_matches)) {
 					$stripped_matches = strlen(strip_tags(join(' ', $diff_matches[0])));
 					$stripped_diff = strlen(strip_tags($diff)) * 2 - $stripped_matches;
+					if ($stripped_diff == 0) { continue; } // Avoid division by zero edge case
 					$diff_ratio = $stripped_matches / $stripped_diff;
-					if ($diff_ratio > $this->_diff_threshold)
-						continue; // Too different. Don't save diffs.
+					if ($diff_ratio > $this->_diff_threshold) { continue; } // Too different. Don't save diffs.
 				}
 
 				// Un-inline the diffs by removing del or ins

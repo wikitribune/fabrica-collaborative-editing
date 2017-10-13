@@ -32,7 +32,7 @@ class Base extends Singleton {
 		add_action('edit_form_top', array($this, 'cacheLastRevisionData'));
 		add_filter('wp_insert_post_data', array($this, 'checkEditConflicts'), 0, 2);
 		add_action('edit_form_after_title', array($this, 'showResolutionHeader'));
-		add_action('edit_form_after_editor', array($this, 'showResolutionFooter'));
+		add_action('admin_enqueue_scripts', array($this, 'enqueueScripts'));
 	}
 
 	// Cache supported post types
@@ -82,7 +82,7 @@ class Base extends Singleton {
 	public function disablePostEditLock() {
 		if (!in_array(get_current_screen()->post_type, $this->postTypesSupported)) { return; } // Exit for unsupported post types
 		add_filter('show_post_locked_dialog', '__return_false');
-		add_action('admin_print_footer_scripts', array($this, 'enqueueScript'), 20);
+		add_action('admin_enqueue_scripts', array($this, 'enqueueHeartbeatScript'), 20);
 	}
 
 	// Add last revision info as form data on post edit
@@ -93,11 +93,11 @@ class Base extends Singleton {
 		if (!$latestRevision) { return; }
 		echo '<input type="hidden" id="fce_last_revision_id" name="_fce_last_revision_id" value="' . $latestRevision->ID . '">';
 
-		// Also, set title to suggested version if transient saved
+		// Also, set title to suggested version if transient saved – we do this here so it's already set before the title field is displayed
 		$transientID = $this->generateTransientID($post->ID, get_current_user_id());
-		$cachedEdit = get_transient($transientID);
-		if ($cachedEdit === false) { return; }
-		if (array_key_exists('post_title', $cachedEdit)) { $post->post_title = $cachedEdit['post_title']; }
+		$conflictsData = get_transient($transientID);
+		if ($conflictsData === false) { return; }
+		if (array_key_exists('post_title', $conflictsData)) { $post->post_title = $conflictsData['post_title']['content']; }
 	}
 
 	// Check for intermediate edits and show a diff for resolution
@@ -132,14 +132,55 @@ class Base extends Singleton {
 
 		// Diff the title, body and other fields to see if there's a conflict...
 		$conflictsData = array();
+
+		// Post title
 		if ($savedPost['post_title'] != wp_unslash($data['post_title'])) {
-			$conflictsData['post_title'] = wp_unslash($data['post_title']);
-			$data['post_title'] = $savedPost['post_title']; // Don't save a change to the post yet
+			$conflictsData['post_title'] = array(
+				'type' => 'plain',
+				'title' => __("Title", self::DOMAIN),
+				'content' => wp_unslash($data['post_title'])
+			);
+			$data['post_title'] = $savedPost['post_title']; // Don't save a change yet
 		}
+
+		// Post body
 		if ($savedPost['post_content'] != wp_unslash($data['post_content'])) {
-			$conflictsData['post_content'] = wp_unslash($data['post_content']);
-			$data['post_content'] = $savedPost['post_content']; // Don't save a change to the post yet
+			$conflictsData['post_content'] = array(
+				'type' => 'wysiwyg',
+				'title' => __("Content", self::DOMAIN),
+				'content' => wp_unslash($data['post_content'])
+			);
+			$data['post_content'] = $savedPost['post_content']; // Don't save a change yet
 		}
+
+		// ACF fields selected for tracking
+		$settings = Settings::instance()->getSettings();
+		if (array_key_exists('conflict_fields_acf', $settings)) {
+			foreach ($settings['conflict_fields_acf'] as $field) {
+
+				// Make sure there is submitted data for this field
+				$fieldObject = get_field_object($field, $savedPost['ID']);
+				if (!$fieldObject) { continue; }
+				if (!array_key_exists('acf', $rawData) || !array_key_exists($fieldObject['key'], $rawData['acf'])) { continue; }
+
+				// If data for this field has been submitted, check it for changes
+				$savedField = get_field($fieldObject['key'], $savedPost['ID'], false);
+				if ($savedField != wp_unslash($rawData['acf'][$fieldObject['key']])) {
+					if ($fieldObject['type'] == 'wysiwyg') {
+						$type = 'wysiwyg';
+					} else {
+						$type = 'plain';
+					}
+					$conflictsData[$fieldObject['key']] = array(
+						'type' => $type,
+						'title' => __($fieldObject['label'], self::DOMAIN),
+						'content' => wp_unslash($rawData['acf'][$fieldObject['key']])
+					);
+					$_POST['acf'][$fieldObject['key']] = $savedField; // Don't save a change yet
+				}
+			}
+		}
+
 		if (count($conflictsData) > 0) {
 
 			// ... there is, so save the conflicted data in a transient based on the post ID and user ID
@@ -155,60 +196,68 @@ class Base extends Singleton {
 		if (!in_array(get_current_screen()->post_type, $this->postTypesSupported)) { return; } // Exit for unsupported post types
 
 		$transientID = $this->generateTransientID($post->ID, get_current_user_id());
-		$cachedEdit = get_transient($transientID);
+		$conflictsData = get_transient($transientID);
 
 		// Leave if no transient (cached changes) set
-		if ($cachedEdit === false) { return; }
+		if ($conflictsData === false) { return; }
 
 		// Restrict copying and pasting
 		add_filter('tiny_mce_before_init', array($this, 'setInvalidTinyMCEElements'));
 
 		// Display instructions and render diff
-		?><style>
-			table.diff { padding: 0.5rem; background-color: #fff; white-space: initial; }
-			table.diff th { font-family: inherit; font-weight: normal; }
-			table.diff td { font-family: Georgia; font-size: 15px; padding: 0.25rem 0.5rem; user-select: none; }
-			table.diff tbody tr td:last-child { user-select: initial; }
-			table.diff td img { max-width: 85% !important; height: auto; margin: 0 auto; display: block; border: 1px solid #ccc; }
-			table.diff .diff-context { font-size: 12px; color: #999; padding: 0.5rem 0; }
-			table.diff td ul li { list-style: circle; margin-left: 2em; }
-			h3.resolution-header { background-color: #444; color: #fff; margin-top: 2rem; padding: 1rem; font-size: 1.125rem; font-weight: normal; line-height: 1.4; text-align: center; }
-			h3.resolution-subhead { margin-top: 2rem; padding-top: 1rem; font-size: 1rem; text-align: center; }
-			div.resolution-actions { margin-bottom: 3rem; text-align: center; }
-		</style>
-		<h3 class="resolution-header"><strong><?php _e("Your proposed changes clash with recent edits by other users.", self::DOMAIN); ?></strong><br><?php _e("Review the latest version, then copy and paste changes you would like to merge in your version.", self::DOMAIN); ?></h3><?php
-		foreach ($cachedEdit as $key => $content) {
+		?><h3 class="fce-resolution-header"><strong><?php _e("Your proposed changes clash with recent edits by other users.", self::DOMAIN); ?></strong><br><?php _e("Review the latest version, then copy and paste changes you would like to merge in your version.", self::DOMAIN); ?></h3><?php
+		foreach ($conflictsData as $key => $field) {
 			if ($key == 'post_title') {
-				echo '<h3 class="resolution-subhead">' . __("Title", self::DOMAIN) . '</h3>';
-				echo $this->renderDiff($content, get_the_title($post->ID)); // $post->post_title already hard reset above for the title field
+				$savedValue = get_the_title($post->ID);
+
+				// $post->post_title already reset above to user's suggestion above in cacheLastRevisionData()
 			} else if ($key == 'post_content') {
-				echo '<h3 class="resolution-subhead">' . __("Content", self::DOMAIN) . '</h3>';
-				echo $this->renderDiff($content, $post->post_content, true);
+				$savedValue = $post->post_content;
+
+				// Show user's suggestion in editor
+				$post->post_content = $field['content'];
+			} else if (substr($key, 0, 5) == 'field') {
+				$savedValue = get_field($key, $post->ID, false);
+
+				// Show user's suggestion in editor
+				add_filter('acf/prepare_field/key=' . $key, function($field) {
+					global $post;
+					$transientID = $this->generateTransientID($post->ID, get_current_user_id());
+					$conflictsData = get_transient($transientID);
+					if ($conflictsData === false) { return $field; }
+					if (!array_key_exists($field['key'], $conflictsData)) { return $field; }
+					$field['value'] = $conflictsData[$field['key']]['content'];
+					return $field;
+				});
+			}
+			if ($field['type'] == 'wysiwyg') {
+				?><div class="fce-diff-pair">
+					<div class="fce-diff-tabs">
+						<div class="fce-diff-tab fce-diff-tab-visual fce-diff-tab--active"><?php _e("Visual", self::DOMAIN); ?></div>
+						<div class="fce-diff-tab fce-diff-tab-text"><?php _e("Text", self::DOMAIN); ?></div>
+					</div>
+					<div class="fce-diff fce-diff-visual fce-diff--active">
+						<h3 class="fce-resolution-subhead"><?php _e($field['title'], self::DOMAIN); ?></h3><?php
+						echo $this->renderDiff($field['content'], $savedValue, true);
+					?></div>
+					<div class="fce-diff fce-diff-text">
+						<h3 class="fce-resolution-subhead"><?php _e($field['title'], self::DOMAIN); ?></h3><?php
+						echo $this->renderDiff($field['content'], $savedValue, false);
+					?></div>
+				</div><?php
+			} else {
+				?><div class="fce-diff fce-diff-text fce-diff--active">
+					<h3 class="fce-resolution-subhead"><?php _e($field['title'], self::DOMAIN); ?></h3><?php
+					echo $this->renderDiff($field['content'], $savedValue, false);
+				?></div><?php
 			}
 		}
-
-		// Show the user's own edit in the body field (title already set in an earlier hook)
-		if (array_key_exists('post_content', $cachedEdit)) { $post->post_content = $cachedEdit['post_content']; }
 	}
 
 	// Disallow pasting certain tags during merge resolution
 	public function setInvalidTinyMCEElements($settings) {
 		$settings['invalid_elements'] = 'table, ins, del';
 		return $settings;
-	}
-
-	// Show footer and buttons for resolution
-	public function showResolutionFooter($post) {
-		if (!in_array(get_current_screen()->post_type, $this->postTypesSupported)) { return; } // Exit for unsupported post types
-
-		$transientID = $this->generateTransientID($post->ID, get_current_user_id());
-		$cachedEdit = get_transient($transientID);
-
-		// Leave if no transient (cached changes) set
-		if ($cachedEdit === false) { return; }
-
-		?><h3 class="resolution-subhead">3. <?php _e("Re-submit the edited version:", self::DOMAIN); ?></h3>
-		<div class="resolution-actions"><?php submit_button('Resolve edit conflict', 'primary large', 'resolve-edit-conflict', false); ?></div><?php
 	}
 
 	// Render the diff
@@ -283,37 +332,16 @@ class Base extends Singleton {
 	// Process information received from server in Heartbeat
 	// Plus other interactions
 	// [TODO] move to JS file?
-	public function enqueueScript() {
-		?><script>
-			jQuery(document).ready(function($) {
+	public function enqueueHeartbeatScript() {
+		wp_enqueue_script('fce-heartbeat', plugin_dir_url(Plugin::MAIN_FILE) . 'js/heartbeat.js', array('jquery'));
+	}
 
-				// Don't show a warning when clicking the Resolve button
-				$('#resolve-edit-conflict').click(function() { $(window).off('beforeunload'); });
-
-				// Increase heartbeat to 5 seconds
-				wp.heartbeat.interval('fast');
-
-				// Send post ID with first tick
-				wp.heartbeat.enqueue('fce', { 'post_id' : jQuery('#post_ID').val() }, true);
-
-				// Listen for Heartbeat repsonses
-				$(document).on('heartbeat-tick.fce', function(e, data) {
-
-					// Re-send the post ID with each subsequent tick
-					wp.heartbeat.enqueue('fce', { 'post_id' : jQuery('#post_ID').val() }, true);
-
-					// [DEBUG] Log response
-					console.log(data);
-
-					// Check if revision has been update
-					// [TODO] Force conflict resolution immediately
-					if (data.fce.last_revision_id != $('#fce_last_revision_id').val()) {
-						console.log('A new revision has been published while you have been editing.');
-					}
-				});
-			});
-			</script>
-		<?php
+	// Set JSs and CSSs for Edit post and Browse revisions pages
+	public function enqueueScripts($hookSuffix) {
+		if ($hookSuffix == 'post.php') {
+			wp_enqueue_style('fce-conflicts', plugin_dir_url(Plugin::MAIN_FILE) . 'css/conflicts.css');
+			wp_enqueue_script('fce-conflicts', plugin_dir_url(Plugin::MAIN_FILE) . 'js/conflicts.js', array('jquery'));
+		}
 	}
 }
 

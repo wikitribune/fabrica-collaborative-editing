@@ -115,9 +115,9 @@ class Settings extends Singleton {
 	// Render ACF field
 	public function renderAcfSetting() {
 		$settings = $this->getSettings();
-		$savedValue = isset($settings['conflict_fields_acf']) ? $settings['conflict_fields_acf'] : '';
+		$savedValue = isset($settings['conflict_fields_acf']) ? $settings['conflict_fields_acf'] : array();
 		echo '<textarea name="fce-settings[conflict_fields_acf]" rows="6" cols="40">' . implode("\n", $savedValue) . '</textarea>';
-		echo '<div><em>Specify ACF field keys or names, one per line. eg. <code>field_59dfd2e9f4e93</code> or <code>sources</code></em>.</div>';
+		echo '<div><em>Specify ACF field keys or names, one per line. eg. <code>field_59dfd2e9f4e93</code></em>.</div>';
 	}
 
 	// Sanitize saved fields

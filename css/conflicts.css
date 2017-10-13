@@ -1,0 +1,89 @@
+.fce-resolution-header {
+	background-color: #444;
+	color: #fff;
+	margin-top: 2rem;
+	padding: 1rem;
+	font-size: 1.125rem;
+	font-weight: normal;
+	line-height: 1.4;
+	text-align: center;
+}
+
+.fce-resolution-subhead {
+	font-size: 1rem;
+}
+
+.fce-diff-pair {
+	position: relative;
+}
+
+.fce-diff-tabs {
+	position: absolute; top: 33px; right: 0;
+}
+
+.fce-diff-tab {
+	display: inline-block;
+	background-color: #ebebeb;
+	color: #666;
+	cursor: pointer;
+	font-size: 13px;
+	line-height: 19px;
+	height: 20px;
+	margin: 5px 0 0 5px;
+	padding: 3px 8px 4px;
+	border: 1px solid #e5e5e5;
+	border-bottom-width: 0;
+	border-radius: 4px 4px 0 0;
+}
+
+.fce-diff-tab--active {
+	background-color: #f5f5f5;
+}
+
+.fce-diff {
+	display: none;
+	margin-top: 2rem;
+	padding-top: 1rem;
+}
+
+.fce-diff--active {
+	display: block;
+}
+
+table.diff {
+	padding: 0.5rem;
+	background-color: #fff;
+	border: 1px solid #e5e5e5;
+	white-space: initial;
+}
+
+table.diff th {
+	font-family: inherit;
+}
+
+table.diff td {
+	padding: 0.25rem 0.5rem;
+	user-select: none;
+}
+
+table.diff tbody tr td:last-child {
+	user-select: initial;
+}
+
+table.diff td img {
+	max-width: 85% !important;
+	height: auto;
+	margin: 0 auto;
+	display: block;
+	border: 1px solid #ccc;
+}
+
+table.diff .diff-context {
+	color: #999;
+	padding: 0.5rem 0;
+}
+
+table.diff td ul li {
+	list-style: circle;
+	margin-left: 2em;
+}
