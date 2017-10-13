@@ -23,12 +23,12 @@ class FCE_Text_Diff_Renderer_Table extends WP_Text_Diff_Renderer_Table {
 
 	public function addedLine($line, $column = false) {
 		$columnClass = $this->getColumnClass();
-		return "<td class='diff-addedline {$columnClass}'>{$line}<br><br></td>";
+		return "<td class='diff-addedline {$columnClass}'>{$line}</td>";
 	}
 
 	public function deletedLine($line, $column = false) {
 		$columnClass = $this->getColumnClass();
-		return "<td class='diff-deletedline {$columnClass}'>{$line}<br><br></td>";
+		return "<td class='diff-deletedline {$columnClass}'>{$line}</td>";
 	}
 
 	public function contextLine($line, $column = false) {
@@ -42,6 +42,6 @@ class FCE_Text_Diff_Renderer_Table extends WP_Text_Diff_Renderer_Table {
 		if (!empty($columnClass)) {
 			$class = "class='{$columnClass}'";
 		}
-		return "<td {$class}>&nbsp;</td>";
+		return "<td {$class}></td>";
 	}
 }
