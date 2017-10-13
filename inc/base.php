@@ -139,29 +139,31 @@ class Base extends Singleton {
 		}
 
 		// ACF fields selected for tracking
-		$settings = Settings::instance()->getSettings();
-		if (array_key_exists('conflict_fields_acf', $settings)) {
-			foreach ($settings['conflict_fields_acf'] as $field) {
+		if (function_exists('get_field_object')) {
+			$settings = Settings::instance()->getSettings();
+			if (array_key_exists('conflict_fields_acf', $settings)) {
+				foreach ($settings['conflict_fields_acf'] as $field) {
 
-				// Make sure there is submitted data for this field
-				$fieldObject = get_field_object($field, $savedPost['ID']);
-				if (!$fieldObject) { continue; }
-				if (!array_key_exists('acf', $rawData) || !array_key_exists($fieldObject['key'], $rawData['acf'])) { continue; }
+					// Make sure there is submitted data for this field
+					$fieldObject = get_field_object($field, $savedPost['ID']);
+					if (!$fieldObject) { continue; }
+					if (!array_key_exists('acf', $rawData) || !array_key_exists($fieldObject['key'], $rawData['acf'])) { continue; }
 
-				// If data for this field has been submitted, check it for changes
-				$savedField = get_field($fieldObject['key'], $savedPost['ID'], false);
-				if ($savedField != wp_unslash($rawData['acf'][$fieldObject['key']])) {
-					if ($fieldObject['type'] == 'wysiwyg') {
-						$type = 'wysiwyg';
-					} else {
-						$type = 'plain';
+					// If data for this field has been submitted, check it for changes
+					$savedField = get_field($fieldObject['key'], $savedPost['ID'], false);
+					if ($savedField != wp_unslash($rawData['acf'][$fieldObject['key']])) {
+						if ($fieldObject['type'] == 'wysiwyg') {
+							$type = 'wysiwyg';
+						} else {
+							$type = 'plain';
+						}
+						$conflictsData[$fieldObject['key']] = array(
+							'type' => $type,
+							'title' => __($fieldObject['label'], self::DOMAIN),
+							'content' => wp_unslash($rawData['acf'][$fieldObject['key']])
+						);
+						$_POST['acf'][$fieldObject['key']] = $savedField; // Don't save a change yet
 					}
-					$conflictsData[$fieldObject['key']] = array(
-						'type' => $type,
-						'title' => __($fieldObject['label'], self::DOMAIN),
-						'content' => wp_unslash($rawData['acf'][$fieldObject['key']])
-					);
-					$_POST['acf'][$fieldObject['key']] = $savedField; // Don't save a change yet
 				}
 			}
 		}
