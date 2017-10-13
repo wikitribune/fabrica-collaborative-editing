@@ -18,7 +18,9 @@
 }
 
 .fce-diff-tabs {
-	position: absolute; top: 33px; right: 0;
+	position: absolute;
+	top: 2px;
+	right: 0;
 }
 
 .fce-diff-tab {
@@ -42,8 +44,7 @@
 
 .fce-diff {
 	display: none;
-	margin-top: 2rem;
-	padding-top: 1rem;
+	margin-bottom: 2rem;
 }
 
 .fce-diff--active {

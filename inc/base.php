@@ -30,8 +30,8 @@ class Base extends Singleton {
 		add_action('load-edit.php', array($this, 'disablePostListLock'));
 		add_action('load-post.php', array($this, 'disablePostEditLock'));
 		add_action('edit_form_top', array($this, 'cacheLastRevisionData'));
+		add_action('edit_form_top', array($this, 'showResolutionHeader'));
 		add_filter('wp_insert_post_data', array($this, 'checkEditConflicts'), 0, 2);
-		add_action('edit_form_after_title', array($this, 'showResolutionHeader'));
 	}
 
 	// Cache supported post types
@@ -85,22 +85,7 @@ class Base extends Singleton {
 		wp_enqueue_style('fce-conflicts', plugin_dir_url(Plugin::MAIN_FILE) . 'css/post.css');
 	}
 
-	// Add last revision info as form data on post edit
-	public function cacheLastRevisionData($post) {
-		if (!$post) { return; } // Exit if some problem with the post
-		if (!in_array($post->post_type, $this->postTypesSupported)) { return; } // Exit for unsupported post types
-		$latestRevision = $this->getLatestPublishedRevision($post->ID);
-		if (!$latestRevision) { return; }
-		echo '<input type="hidden" id="fce_last_revision_id" name="_fce_last_revision_id" value="' . $latestRevision->ID . '">';
-
-		// Also, set title to suggested version if transient saved – we do this here so it's already set before the title field is displayed
-		$transientID = $this->generateTransientID($post->ID, get_current_user_id());
-		$conflictsData = get_transient($transientID);
-		if ($conflictsData === false) { return; }
-		if (array_key_exists('post_title', $conflictsData)) { $post->post_title = $conflictsData['post_title']['content']; }
-	}
-
-	// Check for intermediate edits and show a diff for resolution
+	// Check if there's an edit conflict and cache the data
 	public function checkEditConflicts($data, $rawData) {
 
 		// Don't interfere with autosaves - shouldn't happen anyway since this hook is excluded from AJAX requests, but just in case
@@ -191,10 +176,17 @@ class Base extends Singleton {
 		return $data;
 	}
 
-	// Show header and steps for resolution
-	public function showResolutionHeader($post) {
-		if (!in_array(get_current_screen()->post_type, $this->postTypesSupported)) { return; } // Exit for unsupported post types
+	// Add last revision info as form data on post edit
+	public function cacheLastRevisionData($post) {
+		if (!$post) { return; } // Exit if some problem with the post
+		if (!in_array($post->post_type, $this->postTypesSupported)) { return; } // Exit for unsupported post types
+		$latestRevision = $this->getLatestPublishedRevision($post->ID);
+		if (!$latestRevision) { return; }
+		echo '<input type="hidden" id="fce_last_revision_id" name="_fce_last_revision_id" value="' . $latestRevision->ID . '">';
+	}
 
+	// Display diffs
+	public function showResolutionHeader($post) {
 		$transientID = $this->generateTransientID($post->ID, get_current_user_id());
 		$conflictsData = get_transient($transientID);
 
@@ -205,12 +197,13 @@ class Base extends Singleton {
 		add_filter('tiny_mce_before_init', array($this, 'setInvalidTinyMCEElements'));
 
 		// Display instructions and render diff
-		?><h3 class="fce-resolution-header"><strong><?php _e("Your proposed changes clash with recent edits by other users.", self::DOMAIN); ?></strong><br><?php _e("Review the latest version, then copy and paste changes you would like to merge in your version.", self::DOMAIN); ?></h3><?php
+		?><h3 class="fce-resolution-header"><strong><?php _e("Your proposed changes clash with recent edits by other users.", self::DOMAIN); ?></strong><br><?php _e("Review the differences, then publish a new version below.", self::DOMAIN); ?></h3><?php
 		foreach ($conflictsData as $key => $field) {
 			if ($key == 'post_title') {
 				$savedValue = get_the_title($post->ID);
 
-				// $post->post_title already reset above to user's suggestion above in cacheLastRevisionData()
+				// Show user's suggestion in editor
+				$post->post_title = $field['content'];
 			} else if ($key == 'post_content') {
 				$savedValue = $post->post_content;
 
@@ -252,6 +245,7 @@ class Base extends Singleton {
 				?></div><?php
 			}
 		}
+		?><h3 class="fce-resolution-header"><?php _e("Copy and paste any additional changes you would like to incorporate into your version:", self::DOMAIN); ?></h3><?php
 	}
 
 	// Disallow pasting certain tags during merge resolution
