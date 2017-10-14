@@ -92,7 +92,7 @@ class VisualDiffRendererTable extends TextDiffRendererTable {
 		$final_diffs = array();
 		foreach ($orig_matches as $o => $f) {
 			if (is_numeric($o) && is_numeric($f)) {
-				$text_diff = new Text_Diff('auto', array(array($orig[$o]), array($final[$f])));
+				$text_diff = new \Text_Diff('auto', array(array($orig[$o]), array($final[$f])));
 				$renderer = new $this->inline_diff_renderer;
 				$diff = htmlspecialchars_decode($renderer->render($text_diff));
 				if (preg_match_all('!(<ins>.*?</ins>|<del>.*?</del>)!', $diff, $diff_matches)) {
