@@ -45,6 +45,10 @@ class FCE_WYSIWYG_Diff_Renderer_Table extends WP_Text_Diff_Renderer_Table {
 	public function _added($lines, $encode = true) {
 		$r = '';
 		foreach ($lines as $line) {
+
+			// Eliminate empty block parent elements
+			if ($line == '<ul>' || $line == '<ol>' || $line == '</ul>' || $line == '</ol>') { continue; }
+
 			if ($this->_show_split_view) {
 				$r .= '<tr>' . $this->emptyLine(1) . $this->emptyLine(2) . $this->addedLine($line, 3) . "</tr>\n";
 			} else {
@@ -87,12 +91,33 @@ class FCE_WYSIWYG_Diff_Renderer_Table extends WP_Text_Diff_Renderer_Table {
 		return $r;
 	}
 
+	private function concatenateLists($data) {
+		$result = array();
+		$inList = false;
+		$newRow = '';
+		foreach ($data as $row) {
+			$r = trim($row);
+			if (substr($r, 0, 3) == '<ul' || substr($r, 0, 3) == '<ol') {
+				$inList = substr($r, 1, 2);
+				$newRow = $row;
+			} else if (($inList == 'ul' && substr($r, 0, 4) == '</ul') || ($inList == 'ol' && substr($r, 0, 4) == '</ol')) {
+				$newRow .= $row;
+				$result[] = $newRow;
+				$inList = '';
+			} else if ($inList == 'ul' || $inList == 'ol') {
+				$newRow .= $row;
+			} else {
+				$result[] = $row;
+			}
+		}
+		return $result;
+	}
+
 	public function _changed($orig, $final) {
 
-		// If we are dealing with a list, combine everything into one block for copypasting
-		if (trim(current($final)) == '<ul>' || trim(current($final)) == '<ol>') {
-			$final = array(implode('', $final));
-		}
+		// Concatenate lists into single blocks
+		$orig = $this->concatenateLists($orig);
+		$final = $this->concatenateLists($final);
 
 		$r = '';
 		list($orig_matches, $final_matches, $orig_rows, $final_rows) = $this->interleave_changed_lines($orig, $final);
