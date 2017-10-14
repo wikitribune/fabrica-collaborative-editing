@@ -124,7 +124,7 @@ class Base extends Singleton {
 		// Post title
 		if ($savedPost['post_title'] != wp_unslash($data['post_title'])) {
 			$conflictsData['post_title'] = array(
-				'type' => 'plain',
+				'type' => 'text',
 				'title' => __("Title", self::DOMAIN),
 				'content' => wp_unslash($data['post_title'])
 			);
@@ -136,7 +136,7 @@ class Base extends Singleton {
 		// Post body
 		if ($savedPost['post_content'] != wp_unslash($data['post_content'])) {
 			$conflictsData['post_content'] = array(
-				'type' => 'wysiwyg',
+				'type' => 'visual',
 				'title' => __("Content", self::DOMAIN),
 				'content' => wp_unslash($data['post_content'])
 			);
@@ -165,9 +165,9 @@ class Base extends Singleton {
 					$savedField = get_field($fieldObject['key'], $savedPost['ID'], false);
 					if ($savedField != wp_unslash($rawData['acf'][$fieldObject['key']])) {
 						if ($fieldObject['type'] == 'wysiwyg') {
-							$type = 'wysiwyg';
+							$type = 'visual';
 						} else {
-							$type = 'plain';
+							$type = 'text';
 						}
 						$conflictsData[$fieldObject['key']] = array(
 							'type' => $type,
@@ -265,7 +265,7 @@ class Base extends Singleton {
 					return $field;
 				});
 			}
-			if ($field['type'] == 'wysiwyg') {
+			if ($field['type'] == 'visual') {
 				?><div class="fce-diff-pair">
 					<div class="fce-diff-tabs">
 						<div class="fce-diff-tab fce-diff-tab-visual fce-diff-tab--active"><?php _e("Visual", self::DOMAIN); ?></div>
@@ -297,12 +297,12 @@ class Base extends Singleton {
 	}
 
 	// Render a diff
-	private function renderDiff($left, $right, $wysiwyg = false) {
+	private function renderDiff($left, $right, $visual = false) {
 		$args = array(
 			'title_left' => __("Your version", self::DOMAIN),
 			'title_right' => __("Latest version", self::DOMAIN)
 		);
-		if ($wysiwyg) {
+		if ($visual) {
 			require_once('fce-wysiwyg-diff-renderer-table.php');
 			$renderer = new \FCE_WYSIWYG_Diff_Renderer_Table($args);
 		} else {
