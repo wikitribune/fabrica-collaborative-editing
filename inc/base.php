@@ -258,8 +258,8 @@ class Base extends Singleton {
 
 	// Render the diff
 	private function renderDiff($left, $right, $wysiwyg = false) {
-		require_once('fce-wysiwyg-diff-renderer-table.php');
-		require_once('fce-text-diff-renderer-table.php');
+		require_once('visual-diff-renderer-table.php');
+		require_once('text-diff-renderer-table.php');
 
 		$args = array(
 			'title_left' => __("Your version", self::DOMAIN),
@@ -274,9 +274,9 @@ class Base extends Singleton {
 		$diff = new \Text_Diff($left, $right);
 
 		if ($wysiwyg) {
-			$renderer = new \FCE_WYSIWYG_Diff_Renderer_Table($args);
+			$renderer = new VisualDiffRendererTable($args);
 		} else {
-			$renderer = new \FCE_Text_Diff_Renderer_Table($args);
+			$renderer = new TextDiffRendererTable($args);
 		}
 		$diff = $renderer->render($diff);
 

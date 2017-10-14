@@ -23,22 +23,23 @@ jQuery(document).ready(function($) {
 	});
 
 	// Remove old version contents from diff when copying
-	document.addEventListener('copy', function(event) {
-		$old = $('.diff-left-side, .diff-divider')
-		$old.css('display', 'none');
+	$(document).bind('copy', function(event) {
+		if (!window.getSelection) { return; }
 		var selection = window.getSelection();
-		event.clipboardData.setData('text/plain', selection.toString());
-		if (selection.rangeCount > 0) {
-			range = selection.getRangeAt(0);
-			var $clonedSelection = $(range.cloneContents());
-			$('.diff-left-side, .diff-divider', $clonedSelection).detach();
-			var $div = $('<div></div>');
-			$div.append($clonedSelection);
-			var html = $div.html();
-			event.clipboardData.setData('text/html', html);
-		}
-		$old.css('display', 'table-cell');
+		if (selection.rangeCount <= 0) { return; }
 		event.preventDefault();
+
+		// Remove unwanted DOM elements from selection
+		range = selection.getRangeAt(0);
+		var $clonedSelection = $(range.cloneContents());
+		$('.diff-left-side, .diff-divider', $clonedSelection).detach();
+		event.originalEvent.clipboardData.setData('text/plain', $clonedSelection.text());
+
+		// Create element to get selection HTML from
+		var $div = $('<div></div>');
+		$div.append($clonedSelection);
+		var html = $div.html();
+		event.originalEvent.clipboardData.setData('text/html', html);
 	});
 
 	// Don't show a warning when clicking the Resolve button

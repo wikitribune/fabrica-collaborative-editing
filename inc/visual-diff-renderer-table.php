@@ -1,52 +1,19 @@
 <?php
 
+namespace Fabrica\CollaborativeEditing;
+
 if (!defined('WPINC')) { die(); }
 
 require_once(ABSPATH . WPINC . '/wp-diff.php');
+require_once('text-diff-renderer-table.php');
 
-class FCE_WYSIWYG_Diff_Renderer_Table extends WP_Text_Diff_Renderer_Table {
-
-	private function getColumnClass($column) {
-		if ($column == 1) {
-			return 'diff-left-side';
-		} else if ($column == 2) {
-			return 'diff-divider';
-		} else if ($column == 3) {
-			return 'diff-right-side';
-		}
-
-		return '';
-	}
-
-	public function addedLine($line, $column = false) {
-		$columnClass = $this->getColumnClass($column);
-		return "<td class='diff-addedline {$columnClass}'>{$line}<br><br></td>";
-	}
-
-	public function deletedLine($line, $column = false) {
-		$columnClass = $this->getColumnClass($column);
-		return "<td class='diff-deletedline {$columnClass}'>{$line}<br><br></td>";
-	}
-
-	public function contextLine($line, $column = false) {
-		$columnClass = $this->getColumnClass($column);
-		return "<td class='diff-context {$columnClass}'>{$line}</td>";
-	}
-
-	public function emptyLine($column = false) {
-		$columnClass = $this->getColumnClass($column);
-		$class = '';
-		if (!empty($columnClass)) {
-			$class = "class='{$columnClass}'";
-		}
-		return "<td {$class}>&nbsp;</td>";
-	}
+class VisualDiffRendererTable extends TextDiffRendererTable {
 
 	public function _added($lines, $encode = true) {
 		$r = '';
 		foreach ($lines as $line) {
 			if ($this->_show_split_view) {
-				$r .= '<tr>' . $this->emptyLine(1) . $this->emptyLine(2) . $this->addedLine($line, 3) . "</tr>\n";
+				$r .= '<tr>' . $this->emptyLine() . $this->emptyLine() . $this->addedLine($line) . "</tr>\n";
 			} else {
 				$r .= '<tr>' . $this->addedLine($line) . "</tr>\n";
 			}
@@ -62,7 +29,7 @@ class FCE_WYSIWYG_Diff_Renderer_Table extends WP_Text_Diff_Renderer_Table {
 			if ($line == '<ul>' || $line == '<ol>' || $line == '</ul>' || $line == '</ol>') { continue; }
 
 			if ($this->_show_split_view) {
-				$r .= '<tr>' . $this->deletedLine($line, 1) . $this->emptyLine(2) . $this->emptyLine(3) . "</tr>\n";
+				$r .= '<tr>' . $this->deletedLine($line) . $this->emptyLine() . $this->emptyLine() . "</tr>\n";
 			} else {
 				$r .= '<tr>' . $this->deletedLine($line) . "</tr>\n";
 			}
@@ -79,7 +46,7 @@ class FCE_WYSIWYG_Diff_Renderer_Table extends WP_Text_Diff_Renderer_Table {
 			if ($line == '<ul>' || $line == '<ol>' || $line == '</ul>' || $line == '</ol>') { continue; }
 
 			if ($this->_show_split_view) {
-				$r .= '<tr>' . $this->contextLine($line, 1) . $this->emptyLine(2) . $this->contextLine($line, 3)  . "</tr>\n";
+				$r .= '<tr>' . $this->contextLine($line) . $this->emptyLine() . $this->contextLine($line)  . "</tr>\n";
 			} else {
 				$r .= '<tr>' . $this->contextLine($line) . "</tr>\n";
 			}
@@ -138,7 +105,7 @@ class FCE_WYSIWYG_Diff_Renderer_Table extends WP_Text_Diff_Renderer_Table {
 				$r .= $this->_deleted(array($orig_line));
 			} else { // A true changed row.
 				if ($this->_show_split_view) {
-					$r .= '<tr>' . $this->deletedLine($orig_line, 1) . $this->emptyLine(2) . $this->addedLine($final_line, 2) . "</tr>\n";
+					$r .= '<tr>' . $this->deletedLine($orig_line) . $this->emptyLine() . $this->addedLine($final_line) . "</tr>\n";
 				} else {
 					$r .= '<tr>' . $this->deletedLine($orig_line) . "</tr><tr>" . $this->addedLine($final_line) . "</tr>\n";
 				}

@@ -1,14 +1,17 @@
 <?php
 
+namespace Fabrica\CollaborativeEditing;
+
 if (!defined('WPINC')) { die(); }
 
 require_once(ABSPATH . WPINC . '/wp-diff.php');
 
-class FCE_Text_Diff_Renderer_Table extends WP_Text_Diff_Renderer_Table {
+class TextDiffRendererTable extends \WP_Text_Diff_Renderer_Table {
 
 	private $column = 0;
 
 	private function getColumnClass() {
+		if (!$this->_show_split_view) { return ''; }
 		if (++$this->column > 3) { $this->column = 1; }
 		if ($this->column == 1) {
 			return 'diff-left-side';
