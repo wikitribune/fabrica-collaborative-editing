@@ -26,16 +26,17 @@ class Base extends Singleton {
 		if (wp_doing_ajax()) { return; }
 
 		// Main hooks
-		add_action('admin_init', array($this, 'cachePostTypesSupported'));
+		add_action('admin_init', array($this, 'cacheData'), 1000);
 		add_action('load-edit.php', array($this, 'disablePostListLock'));
 		add_action('load-post.php', array($this, 'disablePostEditLock'));
 		add_action('edit_form_top', array($this, 'cacheLastRevisionData'));
-		add_action('edit_form_top', array($this, 'showResolutionHeader'));
 		add_filter('wp_insert_post_data', array($this, 'checkEditConflicts'), 0, 2);
+		add_filter('admin_body_class', array($this, 'addConflictBodyClass'));
+		add_action('edit_form_top', array($this, 'outputResolutionInterface'));
 	}
 
 	// Cache supported post types
-	public function cachePostTypesSupported() {
+	public function cacheData() {
 		$settings = Settings::instance()->getSettings();
 		$args = array('public' => true);
 		$postTypes = get_post_types($args);
@@ -94,7 +95,10 @@ class Base extends Singleton {
 		// Occasionally seems to get called with an ID of 0, escape early
 		if ($rawData['ID'] == 0) { return $data; }
 
-		// Only proceed if we've received the cached data about the previous revision (this will exclude unsupported post types)
+		// Exit for unsupported post types
+		if (!in_array($rawData['post_type'], $this->postTypesSupported)) { return $data; }
+
+		// Only proceed if we've received the cached data about the previous revision
 		if (!array_key_exists('_fce_last_revision_id', $rawData)) { return $data; }
 
 		// ... and if the current post actually has revisions
@@ -112,7 +116,6 @@ class Base extends Singleton {
 
 		// If still here, a new revision has been published, so check conflicts
 		// Retrieve the saved content of the post being edited, for the diff
-		// [TODO] support certain custom fields as well?
 		$savedPost = get_post($rawData['ID'], ARRAY_A);
 
 		// Diff the title, body and other fields to see if there's a conflict...
@@ -121,21 +124,25 @@ class Base extends Singleton {
 		// Post title
 		if ($savedPost['post_title'] != wp_unslash($data['post_title'])) {
 			$conflictsData['post_title'] = array(
-				'type' => 'plain',
+				'type' => 'text',
 				'title' => __("Title", self::DOMAIN),
 				'content' => wp_unslash($data['post_title'])
 			);
-			$data['post_title'] = $savedPost['post_title']; // Don't save a change yet
+
+			// Revert data to saved version
+			$data['post_title'] = $savedPost['post_title'];
 		}
 
 		// Post body
 		if ($savedPost['post_content'] != wp_unslash($data['post_content'])) {
 			$conflictsData['post_content'] = array(
-				'type' => 'wysiwyg',
+				'type' => 'visual',
 				'title' => __("Content", self::DOMAIN),
 				'content' => wp_unslash($data['post_content'])
 			);
-			$data['post_content'] = $savedPost['post_content']; // Don't save a change yet
+
+			// Revert data to saved version
+			$data['post_content'] = $savedPost['post_content'];
 		}
 
 		// ACF fields selected for tracking
@@ -144,33 +151,39 @@ class Base extends Singleton {
 			if (array_key_exists('conflict_fields_acf', $settings)) {
 				foreach ($settings['conflict_fields_acf'] as $field) {
 
-					// Make sure there is submitted data for this field
+					// Make sure field is valid
 					$fieldObject = get_field_object($field, $savedPost['ID']);
 					if (!$fieldObject) { continue; }
+
+					// ... and that it's a supported field type (text, for now)
+					if (!in_array($fieldObject['type'], array('wysiwyg', 'textarea', 'text'))) { continue; }
+
+					// ... and there is submitted data
 					if (!array_key_exists('acf', $rawData) || !array_key_exists($fieldObject['key'], $rawData['acf'])) { continue; }
 
 					// If data for this field has been submitted, check it for changes
 					$savedField = get_field($fieldObject['key'], $savedPost['ID'], false);
 					if ($savedField != wp_unslash($rawData['acf'][$fieldObject['key']])) {
 						if ($fieldObject['type'] == 'wysiwyg') {
-							$type = 'wysiwyg';
+							$type = 'visual';
 						} else {
-							$type = 'plain';
+							$type = 'text';
 						}
 						$conflictsData[$fieldObject['key']] = array(
 							'type' => $type,
 							'title' => __($fieldObject['label'], self::DOMAIN),
 							'content' => wp_unslash($rawData['acf'][$fieldObject['key']])
 						);
-						$_POST['acf'][$fieldObject['key']] = $savedField; // Don't save a change yet
+
+						// Revert data to saved version
+						$_POST['acf'][$fieldObject['key']] = $savedField;
 					}
 				}
 			}
 		}
 
+		// If there is any conflict, save the conflict data in a transient
 		if (count($conflictsData) > 0) {
-
-			// ... there is, so save the conflicted data in a transient based on the post ID and user ID
 			set_transient($transientID, $conflictsData, WEEK_IN_SECONDS);
 		}
 
@@ -178,28 +191,54 @@ class Base extends Singleton {
 		return $data;
 	}
 
-	// Add last revision info as form data on post edit
+	// Add a body class to admin when there's conflicts
+	public function addConflictBodyClass($classes) {
+		global $post;
+		if (!$post) { return $classes; }
+		$transientID = $this->generateTransientID($post->ID, get_current_user_id());
+		$conflictsData = get_transient($transientID);
+		if (count($conflictsData) > 0) {
+			$classes .= ' fce-has-conflict ';
+		}
+		return $classes;
+	}
+
+	// Cache last revision data in the post form, for subsequent conflict detection on save
 	public function cacheLastRevisionData($post) {
-		if (!$post) { return; } // Exit if some problem with the post
-		if (!in_array($post->post_type, $this->postTypesSupported)) { return; } // Exit for unsupported post types
+
+		// Exit if some problem with the post
+		if (!$post) { return; }
+
+		// Exit for unsupported post types
+		if (!in_array($post->post_type, $this->postTypesSupported)) { return; }
+
+		// Exit if no revision ID for this post at all
 		$latestRevision = $this->getLatestPublishedRevision($post->ID);
 		if (!$latestRevision) { return; }
+
+		// Cache latest revision ID
 		echo '<input type="hidden" id="fce_last_revision_id" name="_fce_last_revision_id" value="' . $latestRevision->ID . '">';
 	}
 
-	// Display diffs
-	public function showResolutionHeader($post) {
+	// Show interface for resolving edit conflicts where necessary
+	public function outputResolutionInterface($post) {
+
+		// Exit if some problem with the post
+		if (!$post) { return; }
+
+		// Exit for unsupported post types
+		if (!in_array($post->post_type, $this->postTypesSupported)) { return; }
+
+		// Exit if no transient (cached changes) set
 		$transientID = $this->generateTransientID($post->ID, get_current_user_id());
 		$conflictsData = get_transient($transientID);
-
-		// Leave if no transient (cached changes) set
 		if ($conflictsData === false) { return; }
 
-		// Restrict copying and pasting
+		// Restrict copying and pasting of elements that will scramble WYSIWYG
 		add_filter('tiny_mce_before_init', array($this, 'setInvalidTinyMCEElements'));
 
 		// Display instructions and render diff
-		?><h3 class="fce-resolution-header"><strong><?php _e("Your proposed changes clash with recent edits by other users.", self::DOMAIN); ?></strong><br><?php _e("Review the differences, then publish a new version below.", self::DOMAIN); ?></h3><?php
+		?><h3 class="fce-resolution-header"><strong><?php _e("Your proposed changes clash with recent edits by other users.", self::DOMAIN); ?></strong><br><?php _e("Review the differences, then copy and paste any changes you would like to merge in your version.", self::DOMAIN); ?></h3><?php
 		foreach ($conflictsData as $key => $field) {
 			if ($key == 'post_title') {
 				$savedValue = get_the_title($post->ID);
@@ -217,6 +256,7 @@ class Base extends Singleton {
 				// Show user's suggestion in editor
 				add_filter('acf/prepare_field/key=' . $key, function($field) {
 					global $post;
+					if (!$post) { return $field; }
 					$transientID = $this->generateTransientID($post->ID, get_current_user_id());
 					$conflictsData = get_transient($transientID);
 					if ($conflictsData === false) { return $field; }
@@ -225,7 +265,7 @@ class Base extends Singleton {
 					return $field;
 				});
 			}
-			if ($field['type'] == 'wysiwyg') {
+			if ($field['type'] == 'visual') {
 				?><div class="fce-diff-pair">
 					<div class="fce-diff-tabs">
 						<div class="fce-diff-tab fce-diff-tab-visual fce-diff-tab--active"><?php _e("Visual", self::DOMAIN); ?></div>
@@ -247,7 +287,7 @@ class Base extends Singleton {
 				?></div><?php
 			}
 		}
-		?><h3 class="fce-resolution-header"><?php _e("Copy and paste any additional changes you would like to incorporate into your version:", self::DOMAIN); ?></h3><?php
+		?><h3 class="fce-resolution-header"><strong><?php _e("Your revised edit:", self::DOMAIN); ?></strong></h3><?php
 	}
 
 	// Disallow pasting certain tags during merge resolution
@@ -256,30 +296,25 @@ class Base extends Singleton {
 		return $settings;
 	}
 
-	// Render the diff
-	private function renderDiff($left, $right, $wysiwyg = false) {
-		require_once('visual-diff-renderer-table.php');
-		require_once('text-diff-renderer-table.php');
-
+	// Render a diff
+	private function renderDiff($left, $right, $visual = false) {
 		$args = array(
 			'title_left' => __("Your version", self::DOMAIN),
 			'title_right' => __("Latest version", self::DOMAIN)
 		);
-
+		if ($visual) {
+			require_once('visual-diff-renderer-table.php');
+			$renderer = new VisualDiffRendererTable($args);
+		} else {
+			require_once('text-diff-renderer-table.php');
+			$renderer = new TextDiffRendererTable($args);
+		}
 		$left = normalize_whitespace($left);
 		$right = normalize_whitespace($right);
-
 		$left = explode("\n", $left);
 		$right = explode("\n", $right);
 		$diff = new \Text_Diff($left, $right);
-
-		if ($wysiwyg) {
-			$renderer = new VisualDiffRendererTable($args);
-		} else {
-			$renderer = new TextDiffRendererTable($args);
-		}
 		$diff = $renderer->render($diff);
-
 		$output = '<table class="diff" id="diff">';
 		$output .= '<col class="content diffsplit left"><col class="content diffsplit middle"><col class="content diffsplit right">';
 		if (array_key_exists('title', $args) || array_key_exists('title_left', $args) || array_key_exists('title_right', $args)) {
