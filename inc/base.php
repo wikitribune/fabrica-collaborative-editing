@@ -194,6 +194,7 @@ class Base extends Singleton {
 	// Add a body class to admin when there's conflicts
 	public function addConflictBodyClass($classes) {
 		global $post;
+		if (!$post) { return $classes; }
 		$transientID = $this->generateTransientID($post->ID, get_current_user_id());
 		$conflictsData = get_transient($transientID);
 		if (count($conflictsData) > 0) {
@@ -255,6 +256,7 @@ class Base extends Singleton {
 				// Show user's suggestion in editor
 				add_filter('acf/prepare_field/key=' . $key, function($field) {
 					global $post;
+					if (!$post) { return $field; }
 					$transientID = $this->generateTransientID($post->ID, get_current_user_id());
 					$conflictsData = get_transient($transientID);
 					if ($conflictsData === false) { return $field; }
