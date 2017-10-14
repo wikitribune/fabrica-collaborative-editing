@@ -1,8 +1,15 @@
+.fce-has-conflict .notice {
+	display: none !important;
+}
+
 .fce-resolution-header {
-	background-color: #444;
+	margin-left: -22px;
+	margin-right: -20px;
+	padding: 20px 30px;
+
+	background-color: #23282d;
 	color: #fff;
-	margin-top: 2rem;
-	padding: 1rem;
+
 	font-size: 1.125rem;
 	font-weight: normal;
 	line-height: 1.4;
@@ -10,7 +17,9 @@
 }
 
 .fce-resolution-subhead {
-	font-size: 1rem;
+	margin-bottom: 14px;
+
+	font-size: 20px;
 }
 
 .fce-diff-pair {
@@ -19,23 +28,29 @@
 
 .fce-diff-tabs {
 	position: absolute;
-	top: 2px;
+	top: 0;
 	right: 0;
 }
 
 .fce-diff-tab {
 	display: inline-block;
+
+	height: 20px;
+
 	background-color: #ebebeb;
 	color: #666;
-	cursor: pointer;
-	font-size: 13px;
-	line-height: 19px;
-	height: 20px;
+
 	margin: 5px 0 0 5px;
 	padding: 3px 8px 4px;
+
 	border: 1px solid #e5e5e5;
 	border-bottom-width: 0;
 	border-radius: 4px 4px 0 0;
+
+	cursor: pointer;
+
+	font-size: 13px;
+	line-height: 19px;
 }
 
 .fce-diff-tab--active {
@@ -44,7 +59,8 @@
 
 .fce-diff {
 	display: none;
-	margin-bottom: 2rem;
+
+	margin-bottom: 20px;
 }
 
 .fce-diff--active {
@@ -52,8 +68,10 @@
 }
 
 table.diff {
-	padding: 0.5rem;
+	padding: 10px;
+
 	background-color: #fff;
+
 	border: 1px solid #e5e5e5;
 	white-space: initial;
 }
@@ -63,7 +81,8 @@ table.diff th {
 }
 
 table.diff td {
-	padding: 0.25rem 0.5rem;
+	padding: 5px 10px;
+
 	-webkit-user-select: none;
 	-moz-user-select: none;
 	-ms-user-select: none;
@@ -78,19 +97,24 @@ table.diff tbody tr td:last-child {
 }
 
 table.diff td img {
+	display: block;
+
 	max-width: 85% !important;
 	height: auto;
+
 	margin: 0 auto;
-	display: block;
+
 	border: 1px solid #ccc;
 }
 
 table.diff .diff-context {
-	color: #999;
 	padding: 0.5rem 0;
+
+	color: #999;
 }
 
 table.diff td ul li {
-	list-style: circle;
 	margin-left: 2em;
+
+	list-style: circle;
 }

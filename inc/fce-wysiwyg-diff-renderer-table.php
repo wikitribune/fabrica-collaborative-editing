@@ -59,7 +59,7 @@ class FCE_WYSIWYG_Diff_Renderer_Table extends WP_Text_Diff_Renderer_Table {
 		foreach ($lines as $line) {
 
 			// Eliminate empty block parent elements
-			// if ($line == '<ul>' || $line == '<ol>' || $line == '</ul>' || $line == '</ol>') { continue; }
+			if ($line == '<ul>' || $line == '<ol>' || $line == '</ul>' || $line == '</ol>') { continue; }
 
 			if ($this->_show_split_view) {
 				$r .= '<tr>' . $this->deletedLine($line, 1) . $this->emptyLine(2) . $this->emptyLine(3) . "</tr>\n";
@@ -76,7 +76,7 @@ class FCE_WYSIWYG_Diff_Renderer_Table extends WP_Text_Diff_Renderer_Table {
 		foreach ($lines as $line) {
 
 			// Eliminate empty block parent elements
-			// if ($line == '<ul>' || $line == '<ol>' || $line == '</ul>' || $line == '</ol>') { continue; }
+			if ($line == '<ul>' || $line == '<ol>' || $line == '</ul>' || $line == '</ol>') { continue; }
 
 			if ($this->_show_split_view) {
 				$r .= '<tr>' . $this->contextLine($line, 1) . $this->emptyLine(2) . $this->contextLine($line, 3)  . "</tr>\n";
@@ -90,9 +90,9 @@ class FCE_WYSIWYG_Diff_Renderer_Table extends WP_Text_Diff_Renderer_Table {
 	public function _changed($orig, $final) {
 
 		// If we are dealing with a list, combine everything into one block for copypasting
-		/* if (trim(current($final)) == '<ul>' || trim(current($final)) == '<ol>') {
+		if (trim(current($final)) == '<ul>' || trim(current($final)) == '<ol>') {
 			$final = array(implode('', $final));
-		} */
+		}
 
 		$r = '';
 		list($orig_matches, $final_matches, $orig_rows, $final_rows) = $this->interleave_changed_lines($orig, $final);
