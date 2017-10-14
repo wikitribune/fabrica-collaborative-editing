@@ -197,7 +197,7 @@ class Base extends Singleton {
 		if (!$post) { return $classes; }
 		$transientID = $this->generateTransientID($post->ID, get_current_user_id());
 		$conflictsData = get_transient($transientID);
-		if (count($conflictsData) > 0) {
+		if (!empty($conflictsData)) {
 			$classes .= ' fce-has-conflict ';
 		}
 		return $classes;
