@@ -76,7 +76,8 @@ table.diff {
 	white-space: initial;
 }
 
-table.diff th {
+table.diff th,
+.fce-diff-visual table.diff td {
 	font-family: inherit;
 }
 
