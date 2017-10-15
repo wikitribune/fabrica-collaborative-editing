@@ -183,7 +183,7 @@ class Base extends Singleton {
 		}
 
 		// If there is any conflict, save the conflict data in a transient
-		if (count($conflictsData) > 0) {
+		if (!empty($conflictsData)) {
 			set_transient($transientID, $conflictsData, WEEK_IN_SECONDS);
 		}
 
@@ -232,7 +232,7 @@ class Base extends Singleton {
 		// Exit if no transient (cached changes) set
 		$transientID = $this->generateTransientID($post->ID, get_current_user_id());
 		$conflictsData = get_transient($transientID);
-		if ($conflictsData === false) { return; }
+		if (empty($conflictsData)) { return; }
 
 		// Restrict copying and pasting of elements that will scramble WYSIWYG
 		add_filter('tiny_mce_before_init', array($this, 'setInvalidTinyMCEElements'));
@@ -259,7 +259,7 @@ class Base extends Singleton {
 					if (!$post) { return $field; }
 					$transientID = $this->generateTransientID($post->ID, get_current_user_id());
 					$conflictsData = get_transient($transientID);
-					if ($conflictsData === false) { return $field; }
+					if (empty($conflictsData)) { return $field; }
 					if (!array_key_exists($field['key'], $conflictsData)) { return $field; }
 					$field['value'] = $conflictsData[$field['key']]['content'];
 					return $field;
