@@ -1,4 +1,5 @@
-jQuery(document).ready(function($) {
+(function($) {
+	$(function() {
 
 	// Increase heartbeat to 5 seconds
 	wp.heartbeat.interval('fast');
@@ -59,4 +60,4 @@ jQuery(document).ready(function($) {
 			$(this).closest('.fce-diff-pair').find('.fce-diff-text').addClass('fce-diff--active');
 		}
 	});
-});
+})(jQuery);
