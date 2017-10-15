@@ -194,7 +194,7 @@ class Base extends Singleton {
 	// Add a body class to admin when there's conflicts
 	public function addConflictBodyClass($classes) {
 		global $post;
-		if (!$post) { return $classes; }
+		if (empty($post)) { return $classes; }
 		$transientID = $this->generateTransientID($post->ID, get_current_user_id());
 		$conflictsData = get_transient($transientID);
 		if (!empty($conflictsData)) {
@@ -207,7 +207,7 @@ class Base extends Singleton {
 	public function cacheLastRevisionData($post) {
 
 		// Exit if some problem with the post
-		if (!$post) { return; }
+		if (empty($post)) { return; }
 
 		// Exit for unsupported post types
 		if (!in_array($post->post_type, $this->postTypesSupported)) { return; }
@@ -256,7 +256,7 @@ class Base extends Singleton {
 				// Show user's suggestion in editor
 				add_filter('acf/prepare_field/key=' . $key, function($field) {
 					global $post;
-					if (!$post) { return $field; }
+					if (empty($post)) { return $field; }
 					$transientID = $this->generateTransientID($post->ID, get_current_user_id());
 					$conflictsData = get_transient($transientID);
 					if (empty($conflictsData)) { return $field; }
@@ -287,7 +287,7 @@ class Base extends Singleton {
 				?></div><?php
 			}
 		}
-		?><h3 class="fce-resolution-header"><strong><?php _e("Your revised edit:", self::DOMAIN); ?></strong></h3><?php
+		?><h3 class="fce-resolution-header"><strong><?php _e("Once you have merged the changes below, re-publish your revised version.", self::DOMAIN); ?></strong></h3><?php
 	}
 
 	// Disallow pasting certain tags during merge resolution
