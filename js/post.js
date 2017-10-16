@@ -33,8 +33,8 @@
 			// Remove unwanted DOM elements from selection
 			range = selection.getRangeAt(0);
 			var $clonedSelection = $(range.cloneContents());
-			console.log($clonedSelection);
 			$('.diff-left-side, .diff-divider', $clonedSelection).detach();
+			$('.diff-right-side', $clonedSelection).after('<br><br>');
 			event.originalEvent.clipboardData.setData('text/plain', $clonedSelection.text());
 
 			// Create element to get selection HTML from

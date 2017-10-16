@@ -9,13 +9,31 @@ require_once('text-diff-renderer-table.php');
 
 class VisualDiffRendererTable extends TextDiffRendererTable {
 
+	private function concatenateLists($data) {
+		$result = array();
+		$inList = false;
+		$newRow = '';
+		foreach ($data as $row) {
+			$r = trim(str_replace(array('<ins>', '</ins>', '<del>', '</del>'), '', $row));
+			if (substr($r, 0, 3) == '<ul' || substr($r, 0, 3) == '<ol') {
+				$inList = substr($r, 1, 2);
+				$newRow = $row;
+			} else if (($inList == 'ul' && substr($r, 0, 4) == '</ul') || ($inList == 'ol' && substr($r, 0, 4) == '</ol')) {
+				$newRow .= $row;
+				$result[] = $newRow;
+				$inList = '';
+			} else if ($inList == 'ul' || $inList == 'ol') {
+				$newRow .= $row;
+			} else { // exclude weird edge cases
+				$result[] = $row;
+			}
+		}
+		return $result;
+	}
+
 	public function _added($lines, $encode = true) {
 		$r = '';
 		foreach ($lines as $line) {
-
-			// Eliminate empty block parent elements
-			if ($line == '<ul>' || $line == '<ol>' || $line == '</ul>' || $line == '</ol>') { continue; }
-
 			if ($this->_show_split_view) {
 				$r .= '<tr>' . $this->emptyLine() . $this->emptyLine() . $this->addedLine($line) . "</tr>\n";
 			} else {
@@ -28,26 +46,19 @@ class VisualDiffRendererTable extends TextDiffRendererTable {
 	public function _deleted($lines, $encode = true) {
 		$r = '';
 		foreach ($lines as $line) {
-
-			// Eliminate empty block parent elements
-			if ($line == '<ul>' || $line == '<ol>' || $line == '</ul>' || $line == '</ol>') { continue; }
-
 			if ($this->_show_split_view) {
 				$r .= '<tr>' . $this->deletedLine($line) . $this->emptyLine() . $this->emptyLine() . "</tr>\n";
 			} else {
 				$r .= '<tr>' . $this->deletedLine($line) . "</tr>\n";
 			}
-
 		}
 		return $r;
 	}
 
 	public function _context($lines, $encode = true) {
+		$lines = $this->concatenateLists($lines);
 		$r = '';
 		foreach ($lines as $line) {
-
-			// Eliminate empty block parent elements
-			if ($line == '<ul>' || $line == '<ol>' || $line == '</ul>' || $line == '</ol>') { continue; }
 
 			if ($this->_show_split_view) {
 				$r .= '<tr>' . $this->contextLine($line) . $this->emptyLine() . $this->contextLine($line)  . "</tr>\n";
@@ -58,34 +69,7 @@ class VisualDiffRendererTable extends TextDiffRendererTable {
 		return $r;
 	}
 
-	private function concatenateLists($data) {
-		$result = array();
-		$inList = false;
-		$newRow = '';
-		foreach ($data as $row) {
-			$r = trim($row);
-			if (substr($r, 0, 3) == '<ul' || substr($r, 0, 3) == '<ol') {
-				$inList = substr($r, 1, 2);
-				$newRow = $row;
-			} else if (($inList == 'ul' && substr($r, 0, 4) == '</ul') || ($inList == 'ol' && substr($r, 0, 4) == '</ol')) {
-				$newRow .= $row;
-				$result[] = $newRow;
-				$inList = '';
-			} else if ($inList == 'ul' || $inList == 'ol') {
-				$newRow .= $row;
-			} else {
-				$result[] = $row;
-			}
-		}
-		return $result;
-	}
-
 	public function _changed($orig, $final) {
-
-		// Concatenate lists into single blocks
-		$orig = $this->concatenateLists($orig);
-		$final = $this->concatenateLists($final);
-
 		$r = '';
 		list($orig_matches, $final_matches, $orig_rows, $final_rows) = $this->interleave_changed_lines($orig, $final);
 		$orig_diffs  = array();
@@ -124,6 +108,11 @@ class VisualDiffRendererTable extends TextDiffRendererTable {
 				$final_line = $final[$final_rows[$row]];
 			else
 				$final_line = '';
+
+			// Concatenate lists into single blocks
+			$orig_line = current($this->concatenateLists(array($orig_line)));
+			$final_line = current($this->concatenateLists(array($final_line)));
+
 			if ($orig_rows[$row] < 0) { // Orig is blank. This is really an added row.
 				$r .= $this->_added(array($final_line));
 			} elseif ($final_rows[$row] < 0) { // Final is blank. This is really a deleted row.
