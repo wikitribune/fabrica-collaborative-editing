@@ -46,6 +46,20 @@ class Base extends Singleton {
 				$this->postTypesSupported[] = $postType;
 			}
 		}
+
+		// Disable lock metafield for all supported post types
+		foreach ($this->postTypesSupported as $postType) {
+			add_filter('get_' . $postType . '_metadata', array($this, 'disableLockMetafield'), 10, 4);
+		}
+	}
+
+	// Disable locked metafield
+	public function disableLockMetafield($value, $objectID, $metaKey, $single) {
+		if ($metaKey == '_edit_lock') {
+			return false;
+		}
+		
+		return $value;
 	}
 
 	// Generates a transient ID from a post ID and user ID
