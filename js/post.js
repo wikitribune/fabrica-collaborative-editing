@@ -28,10 +28,11 @@
 			if (!window.getSelection) { return; }
 			var selection = window.getSelection();
 			if (selection.rangeCount <= 0) { return; }
-			event.preventDefault();
+			var range = selection.getRangeAt(0);
+			if ($(range.commonAncestorContainer).parents('.fce-diff').length <= 0) { return; }
 
 			// Remove unwanted DOM elements from selection
-			range = selection.getRangeAt(0);
+			event.preventDefault();
 			var $clonedSelection = $(range.cloneContents());
 			$('.diff-left-side, .diff-divider', $clonedSelection).detach();
 			$('.diff-right-side:not(:has(li))', $clonedSelection).wrap('<p>');
