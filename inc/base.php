@@ -77,7 +77,6 @@ class Base extends Singleton {
 		global $wpdb;
 		$where .= " AND (" . $wpdb->prefix . "posts.post_name NOT LIKE '%-autosave-v1'";
 		$where .= " OR " . $wpdb->prefix . "posts.post_author = " . get_current_user_id() . ")";
-		error_log($where);
 		return $where;
 	}
 
