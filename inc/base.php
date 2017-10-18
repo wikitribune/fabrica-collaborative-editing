@@ -72,6 +72,15 @@ class Base extends Singleton {
 		return $where;
 	}
 
+	// Filter out other users' autosaves
+	public function filterOutOthersAutosaves($where) {
+		global $wpdb;
+		$where .= " AND (" . $wpdb->prefix . "posts.post_name NOT LIKE '%-autosave-v1'";
+		$where .= " OR " . $wpdb->prefix . "posts.post_author = " . get_current_user_id() . ")";
+		error_log($where);
+		return $where;
+	}
+
 	// Completely disable Heartbeat on list page (to avoid 'X is editing' notifications)
 	public function disablePostListLock() {
 		if (!in_array(get_current_screen()->post_type, $this->postTypesSupported)) { return; } // Exit for unsupported post types
@@ -85,6 +94,8 @@ class Base extends Singleton {
 		add_filter('show_post_locked_dialog', '__return_false');
 		wp_enqueue_script('fce-post', plugin_dir_url(Plugin::MAIN_FILE) . 'js/post.js', array('jquery'));
 		wp_enqueue_style('fce-conflicts', plugin_dir_url(Plugin::MAIN_FILE) . 'css/post.css');
+		add_action('pre_get_posts', function($query) { $query->set('suppress_filters', false); } );
+		add_filter('posts_where', array($this, 'filterOutOthersAutosaves'), 10, 1);
 	}
 
 	// Stop Revisions screen applying a post lock
