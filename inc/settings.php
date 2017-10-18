@@ -62,7 +62,7 @@ class Settings extends Singleton {
 		// Enable / disable section
 		add_settings_section(
 			'enable_collaboration', // ID
-			_("Enable collaborative editing", Base::DOMAIN), // Title
+			__("Enable collaborative editing", Base::DOMAIN), // Title
 			array($this, 'renderEnableCollaborativeEditingHeader'), // Callback
 			'fce-settings' // Page
 		);
@@ -85,7 +85,7 @@ class Settings extends Singleton {
 		// Tracked fields section
 		add_settings_section(
 			'tracked_fields', // ID
-			_("Fields to track", Base::DOMAIN), // Title
+			__("Fields to track", Base::DOMAIN), // Title
 			array($this, 'renderConflictFieldsHeader'), // Callback
 			'fce-settings' // Page
 		);
