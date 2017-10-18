@@ -58,7 +58,7 @@ class Base extends Singleton {
 		if ($metaKey == '_edit_lock') {
 			return false;
 		}
-		
+
 		return $value;
 	}
 
@@ -301,13 +301,45 @@ class Base extends Singleton {
 				?></div><?php
 			}
 		}
-		?><h3 class="fce-resolution-header"><strong><?php _e("Once you have merged the changes below, re-publish your revised version.", self::DOMAIN); ?></strong></h3><?php
+		?><h3 class="fce-resolution-header"><strong><?php _e("Once you have merged the conflicting changes in your version, please resubmit the revision.", self::DOMAIN); ?></strong></h3><?php
 	}
 
 	// Disallow pasting certain tags during merge resolution
 	public function setInvalidTinyMCEElements($settings) {
 		$settings['invalid_elements'] = 'table, ins, del';
 		return $settings;
+	}
+
+	// Run lists into single blocks for more meaningful Visual diffing
+	// Requires ending block tags (<ul>, </ul>, <ol>, </ol>) to be at the beginning of lines
+	private function concatenateLists($data) {
+		$result = array();
+		$depth = 0;
+		$newRow = '';
+		foreach ($data as $row) {
+			$r = trim($row);
+			if (substr($r, 0, 3) == '<ul' || substr($r, 0, 3) == '<ol') {
+				$depth++;
+				$newRow = $r;
+			} else if (substr($r, 0, 4) == '</ul' || substr($r, 0, 4) == '</ol') {
+				if ($depth == 1) {
+					$newRow .= $r;
+					$result[] = $newRow;
+					$depth--;
+				} else if ($depth > 1) {
+					$newRow .= $r;
+					$depth--;
+				}
+			} else if ($depth > 0) {
+				$newRow .= $r;
+			} else {
+				$result[] = $row;
+			}
+		}
+		if ($depth > 0) {
+			$result[] = $newRow;
+		}
+		return $result;
 	}
 
 	// Render a diff
@@ -327,6 +359,12 @@ class Base extends Singleton {
 		$right = normalize_whitespace($right);
 		$left = explode("\n", $left);
 		$right = explode("\n", $right);
+
+		// Handle lists as single blocks in Visual mode
+		if ($visual) {
+			$left = $this->concatenateLists($left);
+			$right = $this->concatenateLists($right);
+		}
 		$diff = new \Text_Diff($left, $right);
 		$diff = $renderer->render($diff);
 		$output = '<table class="diff" id="diff">';

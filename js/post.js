@@ -14,7 +14,7 @@
 			wp.heartbeat.enqueue('fce', { 'post_id' : jQuery('#post_ID').val() }, true);
 
 			// [DEBUG] Log response
-			console.log(data);
+			// console.log(data);
 
 			// Check if revision has been update
 			// [TODO] Force conflict resolution immediately
@@ -34,7 +34,7 @@
 			range = selection.getRangeAt(0);
 			var $clonedSelection = $(range.cloneContents());
 			$('.diff-left-side, .diff-divider', $clonedSelection).detach();
-			$('.diff-right-side', $clonedSelection).after('<br><br>');
+			$('.diff-right-side:not(:has(li))', $clonedSelection).wrap('<p>');
 			event.originalEvent.clipboardData.setData('text/plain', $clonedSelection.text());
 
 			// Create element to get selection HTML from
