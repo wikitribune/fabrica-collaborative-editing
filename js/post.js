@@ -28,8 +28,9 @@
 			if (!window.getSelection) { return; }
 			var selection = window.getSelection();
 			if (selection.rangeCount <= 0) { return; }
-			var range = selection.getRangeAt(0);
-			if ($(range.commonAncestorContainer).parents('.fce-diff').length <= 0) { return; }
+			var range = selection.getRangeAt(0),
+				$container = $(range.commonAncestorContainer);
+			if ($container.parents('.fce-diff').length <= 0 && $container.find('.fce-diff').length <= 0) { return; }
 
 			// Remove unwanted DOM elements from selection
 			event.preventDefault();
