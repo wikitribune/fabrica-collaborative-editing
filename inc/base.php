@@ -90,8 +90,11 @@ class Base extends Singleton {
 	// Stop Revisions screen applying a post lock
 	public function disableRevisionsLock() {
 		$revisionID = false;
-		if (isset($_GET['revision'])) { $revisionID = $_GET['revision']; }
-		else if (isset($_GET['from'])) { $revisionID = $_GET['from']; }
+		if (isset($_GET['revision'])) {
+			$revisionID = $_GET['revision'];
+		} else if (isset($_GET['from'])) {
+			$revisionID = $_GET['from'];
+		}
 		if (!is_numeric($revisionID)) { return; }
 		$parentID = wp_get_post_parent_id($revisionID);
 		if (empty($parentID)) { return; }
@@ -322,7 +325,9 @@ class Base extends Singleton {
 			$r = trim($row);
 			if (substr($r, 0, 3) == '<ul' || substr($r, 0, 3) == '<ol') {
 				if ($depth == 0) {
-					$newRow = '';
+					$newRow = $r;
+				} else {
+					$newRow .= $r;
 				}
 				$depth++;
 			} else if (substr($r, 0, 4) == '</ul' || substr($r, 0, 4) == '</ol') {
