@@ -26,9 +26,10 @@ class Base extends Singleton {
 		if (wp_doing_ajax()) { return; }
 
 		// Main hooks
-		add_action('admin_init', array($this, 'cacheData'), 1000);
+		add_action('admin_init', array($this, 'cacheData'));
 		add_action('load-edit.php', array($this, 'disablePostListLock'));
 		add_action('load-post.php', array($this, 'disablePostEditLock'));
+		add_action('load-revision.php', array($this, 'disableRevisionsLock'));
 		add_action('edit_form_top', array($this, 'cacheLastRevisionData'));
 		add_filter('wp_insert_post_data', array($this, 'checkEditConflicts'), 0, 2);
 		add_filter('admin_body_class', array($this, 'addConflictBodyClass'));
@@ -46,20 +47,6 @@ class Base extends Singleton {
 				$this->postTypesSupported[] = $postType;
 			}
 		}
-
-		// Disable lock metafield for all supported post types
-		foreach ($this->postTypesSupported as $postType) {
-			add_filter('get_' . $postType . '_metadata', array($this, 'disableLockMetafield'), 10, 4);
-		}
-	}
-
-	// Disable locked metafield
-	public function disableLockMetafield($value, $objectID, $metaKey, $single) {
-		if ($metaKey == '_edit_lock') {
-			return false;
-		}
-
-		return $value;
 	}
 
 	// Generates a transient ID from a post ID and user ID
@@ -98,6 +85,20 @@ class Base extends Singleton {
 		add_filter('show_post_locked_dialog', '__return_false');
 		wp_enqueue_script('fce-post', plugin_dir_url(Plugin::MAIN_FILE) . 'js/post.js', array('jquery'));
 		wp_enqueue_style('fce-conflicts', plugin_dir_url(Plugin::MAIN_FILE) . 'css/post.css');
+	}
+
+	// Stop Revisions screen applying a post lock
+	public function disableRevisionsLock() {
+		$revisionID = false;
+		if (isset($_GET['revision'])) { $revisionID = $_GET['revision']; }
+		else if (isset($_GET['from'])) { $revisionID = $_GET['from']; }
+		if (!is_numeric($revisionID)) { return; }
+		$parentID = wp_get_post_parent_id($revisionID);
+		if (empty($parentID)) { return; }
+		$parent = get_post($parentID);
+		if (empty($parent) || !in_array($parent->post_type, $this->postTypesSupported)) { return; }
+
+		add_filter('wp_check_post_lock_window', '__return_false');
 	}
 
 	// Check if there's an edit conflict and cache the data
@@ -252,7 +253,8 @@ class Base extends Singleton {
 		add_filter('tiny_mce_before_init', array($this, 'setInvalidTinyMCEElements'));
 
 		// Display instructions and render diff
-		?><h3 class="fce-resolution-header"><strong><?php _e("Your proposed changes clash with recent edits by other users.", self::DOMAIN); ?></strong><br><?php _e("Review the differences, then copy and paste any changes you would like to merge in your version.", self::DOMAIN); ?></h3><?php
+		$settings = Settings::instance()->getSettings();
+		?><h3 class="fce-resolution-header"><?php _e($settings['your_changes_clash_notification_message'], self::DOMAIN); ?></h3><?php
 		foreach ($conflictsData as $key => $field) {
 			if ($key == 'post_title') {
 				$savedValue = get_the_title($post->ID);
@@ -301,7 +303,7 @@ class Base extends Singleton {
 				?></div><?php
 			}
 		}
-		?><h3 class="fce-resolution-header"><strong><?php _e("Once you have merged the conflicting changes in your version, please resubmit the revision.", self::DOMAIN); ?></strong></h3><?php
+		?><h3 class="fce-resolution-header"><strong><?php _e($settings['after_merge_resubmit_notification_message'], self::DOMAIN); ?></strong></h3><?php
 	}
 
 	// Disallow pasting certain tags during merge resolution
@@ -319,8 +321,10 @@ class Base extends Singleton {
 		foreach ($data as $row) {
 			$r = trim($row);
 			if (substr($r, 0, 3) == '<ul' || substr($r, 0, 3) == '<ol') {
+				if ($depth == 0) {
+					$newRow = '';
+				}
 				$depth++;
-				$newRow = $r;
 			} else if (substr($r, 0, 4) == '</ul' || substr($r, 0, 4) == '</ol') {
 				if ($depth == 1) {
 					$newRow .= $r;
@@ -336,7 +340,7 @@ class Base extends Singleton {
 				$result[] = $row;
 			}
 		}
-		if ($depth > 0) {
+		if ($depth > 0) { // List not closed properly, make sure there is some output
 			$result[] = $newRow;
 		}
 		return $result;
@@ -365,6 +369,8 @@ class Base extends Singleton {
 			$left = $this->concatenateLists($left);
 			$right = $this->concatenateLists($right);
 		}
+
+		// Execute diff
 		$diff = new \Text_Diff($left, $right);
 		$diff = $renderer->render($diff);
 		$output = '<table class="diff" id="diff">';

@@ -18,6 +18,11 @@ class Settings extends Singleton {
 	// Return plugin settings
 	public function getSettings() {
 		$this->settings = $this->settings ?: get_option('fce-settings');
+
+		// Default settings
+		$this->settings['your_changes_clash_notification_message'] = isset($this->settings['your_changes_clash_notification_message']) ? $this->settings['your_changes_clash_notification_message'] : "<strong>Your proposed changes clash with recent edits by other users.</strong><br>Review the differences, then copy and paste any changes you would like to merge in your version.";
+		$this->settings['after_merge_resubmit_notification_message'] = isset($this->settings['after_merge_resubmit_notification_message']) ? $this->settings['after_merge_resubmit_notification_message'] : "Once you have merged the conflicting changes in your version, please resubmit the revision.";
+
 		return $this->settings;
 	}
 
@@ -54,7 +59,7 @@ class Settings extends Singleton {
 			array($this, 'sanitizeSettings') // Sanitize
 		);
 
-		// Register section
+		// Enable / disable section
 		add_settings_section(
 			'enable_collaboration', // ID
 			_("Enable collaborative editing", Base::DOMAIN), // Title
@@ -62,7 +67,7 @@ class Settings extends Singleton {
 			'fce-settings' // Page
 		);
 
-		// Register setting for each post type
+		// Setting for each post type
 		$args = array('public' => true);
 		$postTypes = get_post_types($args, 'objects');
 		foreach ($postTypes as $postType) {
@@ -77,7 +82,7 @@ class Settings extends Singleton {
 			);
 		}
 
-		// Register section
+		// Tracked fields section
 		add_settings_section(
 			'tracked_fields', // ID
 			_("Fields to track", Base::DOMAIN), // Title
@@ -85,12 +90,45 @@ class Settings extends Singleton {
 			'fce-settings' // Page
 		);
 
+		// ACF
 		add_settings_field(
 			'conflict_fields_acf', // ID
 			'ACF fields', // Title
 			array($this, 'renderAcfSetting'), // Callback
 			'fce-settings', // Page
 			'tracked_fields' // Section
+		);
+
+		// Messages section
+		add_settings_section(
+			'notifications_messages', // ID
+			__('Notifications messages', Base::DOMAIN), // Title
+			array($this, 'renderNotificationsMessagesHeader'), // Callback
+			'fce-settings' // Page
+		);
+
+		// Register notifications messages settings
+		add_settings_field(
+			'your_changes_clash_notification_message', // ID
+			__('Changes clash', Base::DOMAIN), // Title
+			array($this, 'renderNotificationMessageSetting'), // Callback
+			'fce-settings', // Page
+			'notifications_messages', // Section
+			array(
+				'notificationMessage' => 'your_changes_clash_notification_message'
+			) // Callback arguments
+		);
+
+		// Register notifications messages settings
+		add_settings_field(
+			'after_merge_resubmit_notification_message', // ID
+			__('Resubmit', Base::DOMAIN), // Title
+			array($this, 'renderNotificationMessageSetting'), // Callback
+			'fce-settings', // Page
+			'notifications_messages', // Section
+			array(
+				'notificationMessage' => 'after_merge_resubmit_notification_message'
+			) // Callback arguments
 		);
 	}
 
@@ -112,12 +150,28 @@ class Settings extends Singleton {
 		echo '<p>' . __("Choose which fields are considered in conflict resolution.", Base::DOMAIN) . '</p>';
 	}
 
+	// Header for default settings section
+	public function renderNotificationsMessagesHeader() {
+		// Empty on purpose
+	}
+
 	// Render ACF field
 	public function renderAcfSetting() {
 		$settings = $this->getSettings();
 		$savedValue = isset($settings['conflict_fields_acf']) ? $settings['conflict_fields_acf'] : array();
 		echo '<textarea name="fce-settings[conflict_fields_acf]" rows="6" cols="40">' . implode("\n", $savedValue) . '</textarea>';
 		echo '<div><em>Specify ACF field keys or names, one per line. eg. <code>field_59dfd2e9f4e93</code></em>.</div>';
+	}
+
+	// Build and show a notification message custom setting
+	public function renderNotificationMessageSetting($data) {
+		if (empty($data['notificationMessage'])) { return; }
+		$settings = $this->getSettings();
+		$savedValue = isset($settings[$data['notificationMessage']]) ? $settings[$data['notificationMessage']] : '';
+		echo '<textarea name="fce-settings[' . $data['notificationMessage'] . ']" rows="6" cols="80" class="fce-notification-message-settings">' . $savedValue . '</textarea>';
+		if (!empty($data['note'])) {
+			echo '<div class="fce-notification-message-settings__note"><em>' . $data['note'] . '</em></div>';
+		}
 	}
 
 	// Sanitize saved fields
@@ -142,6 +196,17 @@ class Settings extends Singleton {
 			}
 		}
 		$sanitizedInput['conflict_fields_acf'] = $fields;
+
+		// Messages
+		$fieldNames = array(
+			'your_changes_clash_notification_message',
+			'after_merge_resubmit_notification_message'
+		);
+		foreach ($fieldNames as $fieldName) {
+			if (isset($input[$fieldName])) {
+				$sanitizedInput[$fieldName] = $input[$fieldName];
+			}
+		}
 
 		// Save
 		return $sanitizedInput;
