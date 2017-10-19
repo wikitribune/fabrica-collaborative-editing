@@ -190,7 +190,7 @@ class Settings extends Singleton {
 
 		// ACF
 		$fields = array();
-		if (isset($input['conflict_fields_acf'])) {
+		if (!empty($input['conflict_fields_acf'])) {
 			foreach (explode("\n", $input['conflict_fields_acf']) as $field) {
 				$fields[] = sanitize_key($field);
 			}

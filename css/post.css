@@ -67,6 +67,40 @@
 	display: block;
 }
 
+.fce-intag-change {
+	position: relative;
+}
+
+.fce-intag-change::after {
+	content: '🚩';
+	display: inline-block;
+	width: 1rem;
+	height: 1rem;
+	border-radius: 50%;
+	background: white;
+}
+
+.fce-intag-change__tooltip {
+	display: none;
+	left: 0;
+	padding: 0.5rem;
+	background: white;
+	box-shadow: 1px 1px 16px black;
+}
+
+.fce-intag-change:hover .fce-intag-change__tooltip {
+	display: block;
+	position: absolute;
+}
+
+.fce-intag-change__diff--ins {
+	background: #e9ffe9;
+}
+
+.fce-intag-change__diff--del {
+	background: #ffe9e9;
+}
+
 table.diff {
 	padding: 10px;
 
