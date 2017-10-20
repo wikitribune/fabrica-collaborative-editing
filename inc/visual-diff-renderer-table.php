@@ -49,26 +49,24 @@ class VisualDiffRendererTable extends TextDiffRendererTable {
 	// Removes a ins and del tags if found within another tag (eg. '<p <ins>class="para"</ins>>')
 	private function removeTagsInsideTags($diff, $keepOld = false) {
 
-		// Each tag much be searched separately to match the open and close tags
-		$newDiff = preg_replace('/<([^>]*)<ins>([^>]*)<\/ins>/',
-			($keepOld ? '{%ins%{$2}}' : '') . '<$1' . ($keepOld ? '' : '$2'), $diff);
-		if ($newDiff == $diff) {
-			$newDiff = preg_replace('/<([^>]*)<del>([^>]*)<\/del>/',
-				($keepOld ? '{%del%{$2}}' : '') . '<$1' . ($keepOld ? '$2' : ''), $diff);
-		}
-		while ($newDiff != $diff) {
-			$diff = $newDiff;
-			$newDiff = preg_replace('/<([^>]*)<ins>([^>]*)<\/ins>/',
-				($keepOld ? '{%ins%{$2}}' : '') . '<$1' . ($keepOld ? '' : '$2'), $diff);
-			if ($newDiff == $diff) {
-				$newDiff = preg_replace('/<([^>]*)<del>([^>]*)<\/del>/',
-					($keepOld ? '{%del%{$2}}' : '') . '<$1' . ($keepOld ? '$2' : ''), $diff);
-			}
+		// Add marker/tooltip at the beginning of every offending tag with the original diffs, replacing ins with placeholders so they're not removed later
+		if ($keepOld) {
+			$diff = preg_replace_callback('/<((([^>]*)<(?:ins|del)>([^>]*)<\/(?:ins|del)>)+[^>]*)>/',
+				function($markers) {
+					$replace = '<span class="fce-intag-change"><span class="fce-intag-change__tooltip">&lt;';
+					$replace .= preg_replace('/<(\/?ins)>/', '{!{$1}}', $markers[1]);
+					return $replace . '&gt;</span></span><' . $markers[1] . '>';
+				}, $diff);
 		}
 
-		// Replace ins and del placeholders with single span with diffs in data attribute
-		$diff = preg_replace('/(^|[^}])\{%([^<]*)\}(<[^\/])/', '$1<span class="fce-intag-change"><span class="fce-intag-change__tooltip"><div>' . __('Changes inside tag:', Base::DOMAIN) . '</div>{%$2}</span></span>$3', $diff);
-		$diff = preg_replace('/\{%(ins|del)%\{([^}]*)\}\}/', '<div class="fce-intag-change__diff fce-intag-change__diff--$1">$2</div>', $diff);
+		// Remove ins and del within other tags
+		$patterns = array('/<([^>]*)<ins>([^>]*)<\/ins>/', '/<([^>]*)<del>([^>]*)<\/del>/');
+		$replaces = array('<$1' . ($keepOld ? '' : '$2'), '<$1' . ($keepOld ? '$2' : ''));
+		$newDiff = preg_replace($patterns, $replaces, $diff);
+		while ($newDiff != $diff) {
+			$diff = $newDiff;
+			$newDiff = preg_replace($patterns, $replaces, $diff);
+		}
 
 		return $diff;
 	}
@@ -96,8 +94,9 @@ class VisualDiffRendererTable extends TextDiffRendererTable {
 				$oldDiff = $this->removeTagsInsideTags($diff, true);
 				$newDiff = $this->removeTagsInsideTags($diff, false);
 
-				// Un-inline the diffs by removing del or ins
-				$orig_diffs[$o]  = preg_replace('|<ins>.*?</ins>|', '', $oldDiff);
+				// Un-inline the diffs by removing del or ins and replace placeholders
+				$oldDiff = preg_replace('|<ins>.*?</ins>|', '', $oldDiff);
+				$orig_diffs[$o] = preg_replace('|{!{(/?ins)}}|', '<$1>', $oldDiff);
 				$final_diffs[$f] = preg_replace('|<del>.*?</del>|', '', $newDiff);
 			}
 		}

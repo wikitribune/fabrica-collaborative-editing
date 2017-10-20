@@ -93,12 +93,9 @@
 	position: absolute;
 }
 
-.fce-intag-change__diff--ins {
-	background: #e9ffe9;
-}
-
-.fce-intag-change__diff--del {
-	background: #ffe9e9;
+.fce-intag-change__tooltip ins {
+	background-color: #afa;
+	text-decoration: none;
 }
 
 table.diff {
