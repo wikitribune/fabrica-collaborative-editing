@@ -49,6 +49,13 @@ class VisualDiffRendererTable extends TextDiffRendererTable {
 	// Removes a ins and del tags if found within another tag (eg. '<p <ins>class="para"</ins>>')
 	private function removeTagsInsideTags($diff, $keepOld = false) {
 
+		// Close/open unmatched opening/closing ins and del inside another tag
+		if ($keepOld) {
+			$patterns = array('/<(\/?[^>]*)<(ins|del)>([^<>]*)>/', '/<(\/?[^>]*)<\/(ins|del)>([^<>]*)>/');
+			$replaces = array('<$1<$2>$3</$2>><$2>', '</$2><<$2>$1</$2>$3>');
+			$diff = preg_replace($patterns, $replaces, $diff);
+		}
+
 		// Add marker/tooltip at the beginning of every offending tag with the original diffs, replacing ins with placeholders so they're not removed later
 		if ($keepOld) {
 			$diff = preg_replace_callback('/<((([^>]*)<(?:ins|del)>([^>]*)<\/(?:ins|del)>)+[^>]*)>/',
@@ -130,5 +137,41 @@ class VisualDiffRendererTable extends TextDiffRendererTable {
 			}
 		}
 		return $r;
+	}
+
+	// Run lists into single blocks for more meaningful Visual diffing
+	// Requires ending block tags (<ul>, </ul>, <ol>, </ol>) to be at the beginning of lines
+	public function concatenateLists($data) {
+		$result = array();
+		$depth = 0;
+		$newRow = '';
+		foreach ($data as $row) {
+			$r = trim($row);
+			if (substr($r, 0, 3) == '<ul' || substr($r, 0, 3) == '<ol') {
+				if ($depth == 0) {
+					$newRow = $r;
+				} else {
+					$newRow .= $r;
+				}
+				$depth++;
+			} else if (substr($r, 0, 4) == '</ul' || substr($r, 0, 4) == '</ol') {
+				if ($depth == 1) {
+					$newRow .= $r;
+					$result[] = $newRow;
+					$depth--;
+				} else if ($depth > 1) {
+					$newRow .= $r;
+					$depth--;
+				}
+			} else if ($depth > 0) {
+				$newRow .= $r;
+			} else {
+				$result[] = $row;
+			}
+		}
+		if ($depth > 0) { // List not closed properly, make sure there is some output
+			$result[] = $newRow;
+		}
+		return $result;
 	}
 }

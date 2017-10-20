@@ -325,64 +325,27 @@ class Base extends Singleton {
 		return $settings;
 	}
 
-	// Run lists into single blocks for more meaningful Visual diffing
-	// Requires ending block tags (<ul>, </ul>, <ol>, </ol>) to be at the beginning of lines
-	private function concatenateLists($data) {
-		$result = array();
-		$depth = 0;
-		$newRow = '';
-		foreach ($data as $row) {
-			$r = trim($row);
-			if (substr($r, 0, 3) == '<ul' || substr($r, 0, 3) == '<ol') {
-				if ($depth == 0) {
-					$newRow = $r;
-				} else {
-					$newRow .= $r;
-				}
-				$depth++;
-			} else if (substr($r, 0, 4) == '</ul' || substr($r, 0, 4) == '</ol') {
-				if ($depth == 1) {
-					$newRow .= $r;
-					$result[] = $newRow;
-					$depth--;
-				} else if ($depth > 1) {
-					$newRow .= $r;
-					$depth--;
-				}
-			} else if ($depth > 0) {
-				$newRow .= $r;
-			} else {
-				$result[] = $row;
-			}
-		}
-		if ($depth > 0) { // List not closed properly, make sure there is some output
-			$result[] = $newRow;
-		}
-		return $result;
-	}
-
 	// Render a diff
 	private function renderDiff($left, $right, $visual = false) {
 		$args = array(
 			'title_left' => __("Your version", self::DOMAIN),
 			'title_right' => __("Latest version", self::DOMAIN)
 		);
-		if ($visual) {
-			require_once('visual-diff-renderer-table.php');
-			$renderer = new VisualDiffRendererTable($args);
-		} else {
-			require_once('text-diff-renderer-table.php');
-			$renderer = new TextDiffRendererTable($args);
-		}
 		$left = normalize_whitespace($left);
 		$right = normalize_whitespace($right);
 		$left = explode("\n", $left);
 		$right = explode("\n", $right);
 
-		// Handle lists as single blocks in Visual mode
 		if ($visual) {
-			$left = $this->concatenateLists($left);
-			$right = $this->concatenateLists($right);
+			require_once('visual-diff-renderer-table.php');
+			$renderer = new VisualDiffRendererTable($args);
+
+			// Handle lists as single blocks in Visual mode
+			$left = $renderer->concatenateLists($left);
+			$right = $renderer->concatenateLists($right);
+		} else {
+			require_once('text-diff-renderer-table.php');
+			$renderer = new TextDiffRendererTable($args);
 		}
 
 		// Execute diff
