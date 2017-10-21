@@ -51,10 +51,17 @@ class VisualDiffRendererTable extends TextDiffRendererTable {
 
 		// Close/open unmatched opening/closing ins and del inside another tag
 		if ($keepOld) {
+
+			// Eg. `<p <ins>class="para">text</</ins>p>` => `<p <ins>class="para"</ins>><ins>text</ins><<ins>/</ins>p>`
 			$patterns = array('/<(\/?[^>]*)<(ins|del)>([^<>]*)>/', '/<(\/?[^>]*)<\/(ins|del)>([^<>]*)>/');
 			$replaces = array('<$1<$2>$3</$2>><$2>', '</$2><<$2>$1</$2>$3>');
-			$diff = preg_replace($patterns, $replaces, $diff);
+		} else {
+
+			// Eg. `<p <ins>class="para">text</</ins>p>` => `<p class="para"><ins>text</ins></p>`
+			$patterns = array('/<(\/?[^>]*)<ins>([^<>]*)>/', '/<(\/?[^>]*)<\/ins>([^<>]*)>/');
+			$replaces = array('<$1$3><$2>', '</$2><$1$3>');
 		}
+		$diff = preg_replace($patterns, $replaces, $diff);
 
 		// Add marker/tooltip at the beginning of every offending tag with the original diffs, replacing ins with placeholders so they're not removed later
 		if ($keepOld) {
