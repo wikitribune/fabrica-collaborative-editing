@@ -283,8 +283,7 @@ class Base extends Singleton {
 				$savedValue = get_field($key, $post->ID, false);
 
 				// Show user's suggestion in editor
-				add_filter('acf/prepare_field/key=' . $key, function($field) {
-					global $post;
+				add_filter('acf/prepare_field/key=' . $key, function($field) use ($post) {
 					if (empty($post)) { return $field; }
 					$transientID = $this->generateTransientID($post->ID, get_current_user_id());
 					$conflictsData = get_transient($transientID);
