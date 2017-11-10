@@ -10,7 +10,7 @@
     "require": {
         "composer/installers": "*"
     },
-    "dist": {
+    "source": {
         "url": "git@bitbucket.org:yeswework/fabrica-collaborative-editing.git",
         "type": "git"
     }
