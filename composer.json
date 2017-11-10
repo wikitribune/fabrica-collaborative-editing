@@ -1,0 +1,17 @@
+{
+    "name": "fabrica/fabrica-collaborative-editing",
+    "type": "wordpress-plugin",
+    "authors": [
+        {
+            "name": "Fabrica",
+            "email": "info@fabri.ca"
+        }
+    ],
+    "require": {
+        "composer/installers": "*"
+    },
+    "dist": {
+        "url": "git@bitbucket.org:yeswework/fabrica-collaborative-editing.git",
+        "type": "git"
+    }
+}
