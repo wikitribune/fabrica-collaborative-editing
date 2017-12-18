@@ -22,6 +22,8 @@ class Settings extends Singleton {
 		// Default settings
 		$this->settings['your_changes_clash_notification_message'] = isset($this->settings['your_changes_clash_notification_message']) ? $this->settings['your_changes_clash_notification_message'] : "<strong>Your proposed changes clash with recent edits by other users.</strong><br>Review the differences, then copy and paste any changes you would like to merge in your version.";
 		$this->settings['after_merge_resubmit_notification_message'] = isset($this->settings['after_merge_resubmit_notification_message']) ? $this->settings['after_merge_resubmit_notification_message'] : "Once you have merged the conflicting changes in your version, please resubmit the revision.";
+		$this->settings['you_can_abandon_notification_message'] = isset($this->settings['you_can_abandon_notification_message']) ? $this->settings['you_can_abandon_notification_message'] : "In some circumstances you may need to permanently abandon your suggested changes.";
+		$this->settings['you_have_abandoned_notification_message'] = isset($this->settings['you_have_abandoned_notification_message']) ? $this->settings['you_have_abandoned_notification_message'] : "Your changes were discarded.";
 
 		return $this->settings;
 	}
@@ -119,7 +121,6 @@ class Settings extends Singleton {
 			) // Callback arguments
 		);
 
-		// Register notifications messages settings
 		add_settings_field(
 			'after_merge_resubmit_notification_message', // ID
 			__('Resubmit', Base::DOMAIN), // Title
@@ -128,6 +129,28 @@ class Settings extends Singleton {
 			'notifications_messages', // Section
 			array(
 				'notificationMessage' => 'after_merge_resubmit_notification_message'
+			) // Callback arguments
+		);
+
+		add_settings_field(
+			'you_can_abandon_notification_message', // ID
+			__('You can abandon your changes', Base::DOMAIN), // Title
+			array($this, 'renderNotificationMessageSetting'), // Callback
+			'fce-settings', // Page
+			'notifications_messages', // Section
+			array(
+				'notificationMessage' => 'you_can_abandon_notification_message'
+			) // Callback arguments
+		);
+
+		add_settings_field(
+			'you_have_abandoned_notification_message', // ID
+			__('You have abandoned your changes', Base::DOMAIN), // Title
+			array($this, 'renderNotificationMessageSetting'), // Callback
+			'fce-settings', // Page
+			'notifications_messages', // Section
+			array(
+				'notificationMessage' => 'you_have_abandoned_notification_message'
 			) // Callback arguments
 		);
 	}
@@ -200,7 +223,9 @@ class Settings extends Singleton {
 		// Messages
 		$fieldNames = array(
 			'your_changes_clash_notification_message',
-			'after_merge_resubmit_notification_message'
+			'after_merge_resubmit_notification_message',
+			'you_can_abandon_notification_message',
+			'you_have_abandoned_notification_message',
 		);
 		foreach ($fieldNames as $fieldName) {
 			if (isset($input[$fieldName])) {

@@ -16,6 +16,23 @@
 	text-align: center;
 }
 
+.fce-abandon-changes {
+	margin-left: -22px;
+	margin-right: -20px;
+	margin-top: -20px;
+	padding: 20px 30px;
+
+	background-color: #e0e0e0;
+	color: #828282;
+
+	font-size: 0.75rem;
+	text-align: center;
+}
+
+.wp-core-ui .fce-abandon-changes-button {
+	vertical-align: baseline;
+}
+
 .fce-resolution-subhead {
 	margin-bottom: 14px;
 

@@ -28,6 +28,7 @@ class Base extends Singleton {
 		// Main hooks
 		add_action('admin_init', array($this, 'cacheData'));
 		add_action('load-edit.php', array($this, 'disablePostListLock'));
+		add_action('admin_head', array($this, 'abandonChanges'));
 		add_action('load-post.php', array($this, 'disablePostEditLock'));
 		add_action('load-revision.php', array($this, 'disableRevisionsLock'));
 		add_action('edit_form_top', array($this, 'cacheLastRevisionData'));
@@ -95,6 +96,26 @@ class Base extends Singleton {
 		wp_enqueue_style('fce-conflicts', plugin_dir_url(Plugin::MAIN_FILE) . 'css/post.css');
 		add_action('pre_get_posts', function($query) { $query->set('suppress_filters', false); } );
 		add_filter('posts_where', array($this, 'filterOutOthersAutosaves'), 10, 1);
+	}
+
+	// Abandon changes when requested
+	public function abandonChanges() {
+		$screen = get_current_screen();
+		if (!in_array($screen->post_type, $this->postTypesSupported)) { return; }
+		if ($screen->base != 'post') { return; }
+		$postID = get_the_ID();
+		if (empty($postID)) { return; }
+		if (isset($_GET['fce-abandon-changes']) && isset($_GET['fce_nonce'])) {
+			if (wp_verify_nonce($_GET['fce_nonce'], 'abandon_changes')) {
+				echo 'verified';
+				$transientID = $this->generateTransientID($postID, get_current_user_id());
+				delete_transient($transientID);
+				add_action('admin_notices', function(){
+					$settings = Settings::instance()->getSettings();
+					echo '<div class="notice notice-warning"><p>' . __($settings['you_have_abandoned_notification_message'], self::DOMAIN) . '</p></div>';
+				});
+			}
+		}
 	}
 
 	// Stop Revisions screen applying a post lock
@@ -267,7 +288,8 @@ class Base extends Singleton {
 
 		// Display instructions and render diff
 		$settings = Settings::instance()->getSettings();
-		?><h3 class="fce-resolution-header"><?php _e($settings['your_changes_clash_notification_message'], self::DOMAIN); ?></h3><?php
+		?><h3 class="fce-resolution-header"><?php _e($settings['your_changes_clash_notification_message'], self::DOMAIN); ?></h3>
+		<div class="fce-abandon-changes"><?php _e($settings['you_can_abandon_notification_message'], self::DOMAIN); ?> <a class="fce-abandon-changes-button button" href="<?php echo wp_nonce_url(admin_url('post.php?action=edit&post=' . $post->ID . '&fce-abandon-changes'), 'abandon_changes', 'fce_nonce'); ?>">Abandon your edit</a></div><?php
 		foreach ($conflictsData as $key => $field) {
 			if ($key == 'post_title') {
 				$savedValue = get_the_title($post->ID);
