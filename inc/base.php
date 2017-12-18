@@ -107,7 +107,6 @@ class Base extends Singleton {
 		if (empty($postID)) { return; }
 		if (isset($_GET['fce-abandon-changes']) && isset($_GET['fce_nonce'])) {
 			if (wp_verify_nonce($_GET['fce_nonce'], 'abandon_changes')) {
-				echo 'verified';
 				$transientID = $this->generateTransientID($postID, get_current_user_id());
 				delete_transient($transientID);
 				add_action('admin_notices', function(){
