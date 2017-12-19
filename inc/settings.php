@@ -23,7 +23,7 @@ class Settings extends Singleton {
 		$this->settings['your_changes_clash_notification_message'] = isset($this->settings['your_changes_clash_notification_message']) ? $this->settings['your_changes_clash_notification_message'] : "<strong>Your proposed changes clash with recent edits by other users.</strong><br>Review the differences, then copy and paste any changes you would like to merge in your version.";
 		$this->settings['after_merge_resubmit_notification_message'] = isset($this->settings['after_merge_resubmit_notification_message']) ? $this->settings['after_merge_resubmit_notification_message'] : "Once you have merged the conflicting changes in your version, please resubmit the revision.";
 		$this->settings['you_can_abandon_notification_message'] = isset($this->settings['you_can_abandon_notification_message']) ? $this->settings['you_can_abandon_notification_message'] : "In some circumstances you may need to permanently abandon your suggested changes.";
-		$this->settings['you_have_abandoned_notification_message'] = isset($this->settings['you_have_abandoned_notification_message']) ? $this->settings['you_have_abandoned_notification_message'] : "Your changes were discarded.";
+		$this->settings['you_have_abandoned_notification_message'] = isset($this->settings['you_have_abandoned_notification_message']) ? $this->settings['you_have_abandoned_notification_message'] : "Your suggested changes were discarded.";
 
 		return $this->settings;
 	}
