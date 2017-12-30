@@ -12,7 +12,6 @@
     },
     "source": {
         "url": "git@bitbucket.org:yeswework/fabrica-collaborative-editing.git",
-        "type": "git",
-        "reference": "master"
+        "type": "git"
     }
 }
