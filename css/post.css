@@ -93,8 +93,7 @@
 	display: inline-block;
 	width: 1rem;
 	height: 1rem;
-	border-radius: 50%;
-	background: white;
+	text-align: center;
 }
 
 .fce-intag-change__tooltip {
@@ -102,7 +101,7 @@
 	left: 0;
 	padding: 0.5rem;
 	background: white;
-	box-shadow: 1px 1px 16px black;
+	box-shadow: 1px 1px 16px rgba(0, 0, 0, 0.2);
 }
 
 .fce-intag-change:hover .fce-intag-change__tooltip {
