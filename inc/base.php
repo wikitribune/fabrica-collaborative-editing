@@ -232,7 +232,7 @@ class Base extends Singleton {
 
 		// If there is any conflict, save the conflict data in a transient
 		if (!empty($conflictsData)) {
-			set_transient($transientID, $conflictsData, WEEK_IN_SECONDS);
+			set_transient($transientID, base64_encode(serialize($conflictsData)), WEEK_IN_SECONDS);
 		}
 
 		// Return data for saving
@@ -279,7 +279,7 @@ class Base extends Singleton {
 
 		// Exit if no transient (cached changes) set
 		$transientID = $this->generateTransientID($post->ID, get_current_user_id());
-		$conflictsData = get_transient($transientID);
+		$conflictsData = unserialize(base64_decode(get_transient($transientID)));
 		if (empty($conflictsData)) { return; }
 
 		// Restrict copying and pasting of elements that will scramble WYSIWYG
