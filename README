@@ -26,8 +26,8 @@ NB. FCE’s collaborative editing model is not Google Docs -like; users do not s
 Download the zip file and install in WordPress via Plugins > Add New > Upload Plugin, then activate the plugin.
 
 ## Release History
-- 0.1.0
--- Published as an open-source project on Github
+0.1.0
+- Published as an open-source project on Github
 
 ## Who made this
 FCE was originally designed and coded by [Yes We Work](http://yeswework.com/) in conjunction with WikiTribune. [Fabrica](https://fabri.ca/) is a series of tools designed to improve WordPress for content creators and developers.
