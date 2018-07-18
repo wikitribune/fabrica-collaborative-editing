@@ -1,5 +1,5 @@
 # Fabrica Collaborative Editing
-FCE is a plugin to make WordPress more Wiki-like by allowing more than one person to edit the same Post, Page, or Custom Post Type at the same time. When edits conflict, FCE helps users to view, compare, and merge changes before saving.
+FCE is a plugin developed by [Yes We Work](http://yeswework.com/) to make WordPress more Wiki-like by allowing more than one person to edit the same Post, Page, or Custom Post Type at the same time. When edits conflict, FCE helps users to view, compare, and merge changes before saving.
 
 ## Who is this for?
 At its most general, Fabrica Collaborative Editing is a plugin for any multi-user WordPress site where people work together on content.
